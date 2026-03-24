@@ -1,0 +1,34 @@
+# =========================================
+# PYTHON & MÔI TRƯỜNG ẢO
+# =========================================
+__pycache__/
+*.py[cod]
+*$py.class
+venv/
+env/
+.env
+
+# =========================================
+# TRỌNG SỐ MÔ HÌNH AI (CỰC KỲ QUAN TRỌNG)
+# Tuyệt đối không push file .pt hoặc .onnx vài chục MB lên Git
+# =========================================
+*.pt
+*.onnx
+*.engine
+
+# =========================================
+# DỮ LIỆU THỰC NGHIỆM & LOGS
+# Chỉ giữ lại thư mục rỗng, bỏ qua các file CSV và Video bên trong
+# =========================================
+data/logs/*.csv
+data/videos/*.mp4
+data/videos/*.avi
+*.log
+
+# =========================================
+# CẤU HÌNH IDE & HỆ ĐIỀU HÀNH
+# =========================================
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db

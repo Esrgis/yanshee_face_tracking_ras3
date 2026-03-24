@@ -1,0 +1,38 @@
+{
+  "system": {
+    "use_pid": true,
+    "use_kalman": true,
+    "use_smooth": false,
+    "log_csv": true,
+    "csv_file_path": "data/logs/experiment_log.csv"
+  },
+  "camera": {
+    "model_path": "models/yolov12n-face.pt",
+    "frame_width": 320,
+    "frame_height": 240,
+    "target_fps": 10,
+    "conf_threshold": 0.5,
+    "bbox_min_size": 40
+  },
+  "robot_yanshee": {
+    "max_angle": 180.0,
+    "min_angle": 0.0,
+    "default_angle": 90.0,
+    "backoff_delta": 5.0,
+    "timeout_lost": 3.0
+  },
+  "controller_pid": {
+    "Kp": 0.05,
+    "Ki": 0.0,
+    "Kd": 0.01,
+    "max_integral": 50.0
+  },
+  "filter_kalman": {
+    "process_noise_cov": 0.03,
+    "measurement_noise_cov": 0.1
+  },
+  "testing_env": {
+    "use_live_camera": false,
+    "video_source": "data/videos/videoplayback.mp4"
+  }
+}
