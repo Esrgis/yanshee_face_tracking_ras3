@@ -12,7 +12,7 @@ The pipeline is designed with strict **Separation of Concerns** (Hardware Abstra
 
 ## 📂 Folder Structure
 
-\`\`\`text
+```text
 yanshee_visual_tracking/
 ├── core/                       # Core algorithm modules
 │   ├── __init__.py
@@ -30,18 +30,19 @@ yanshee_visual_tracking/
 ├── config.json                 # Centralized configuration file
 ├── main_tracker.py             # Main entry point script
 └── requirements.txt            # Environment dependencies
-\`\`\`
+```
 
 ## ⚙️ Environment Setup
 
+**⚠️ CRITICAL WARNING:** The system relies on the KCF Tracker (a legacy OpenCV tracker). To avoid library conflicts, you **MUST NOT** install both `opencv-python` and `opencv-contrib-python` at the same time.
 
-**Step 1:** Install python3.11 
+**Step 1:** Install python3.11
 
 **Step 2:** Install required dependencies:
-\`\`\`bash
+```bash
 pip install -r requirements.txt
-\`\`\`
-
+```
+*(Key libraries: `opencv-contrib-python`, `ultralytics`, `onnx`, `onnxruntime`, `numpy`)*
 
 ## 🚀 Configuration & Usage
 
@@ -51,21 +52,21 @@ The system's behavior is fully controlled via `config.json`.
 Open `config.json`, locate the `"camera"` block. You can easily hot-swap the model backend by changing `"model_backend"` and `"model_path"`:
 
 * **Use ONNX (Recommended for CPU/Edge Devices):**
-  \`\`\`json
+  ```json
   "camera": {
       "model_path": "models/yolov8n-face-lindevs.onnx",
       "model_backend": "onnx",
       ...
   }
-  \`\`\`
+  ```
 * **Use Ultralytics (.pt):**
-  \`\`\`json
+  ```json
   "camera": {
       "model_path": "models/yolov12n-face.pt",
       "model_backend": "pt",
       ...
   }
-  \`\`\`
+  ```
 
 ### 2. Video Source Selection
 In `config.json`, find the `"testing_env"` block:
@@ -74,7 +75,7 @@ In `config.json`, find the `"testing_env"` block:
 
 ### 3. Run the Tracker
 Run the main script from the root directory:
-\`\`\`bash
+```bash
 python main_tracker.py
-\`\`\`
+```
 *(Press `q` on the video window to gracefully exit and save logs).*
