@@ -6,7 +6,9 @@ import math
 import os
 
 # Import các module lõi anh vừa viết
-from core.vision import VisionSystem
+# Import các module lõi anh vừa viết
+from core.vision_onnx import VisionONNX
+from core.vision_ultralytics import VisionUltralytics
 from core.control import PIDController
 from core.filters import TrackerKalmanFilter, MovingAverage
 from core.state_machine import TrackingStateMachine, RobotState
@@ -31,7 +33,14 @@ def main():
     env_cfg = config["testing_env"]
 
     # 2. KHỞI TẠO CÁC MODULE (5 Viên ngọc vô cực)
-    vision = VisionSystem(model_path=cam_cfg["model_path"], conf_threshold=cam_cfg["conf_threshold"])
+    # Khởi tạo Vision linh hoạt theo cấu hình
+    backend = cam_cfg.get("model_backend", "pt")
+    if backend == "onnx":
+        vision = VisionONNX(model_path=cam_cfg["model_path"], conf_threshold=cam_cfg["conf_threshold"])
+    elif backend == "pt":
+        vision = VisionUltralytics(model_path=cam_cfg["model_path"], conf_threshold=cam_cfg["conf_threshold"])
+    else:
+        raise ValueError(f"[CONFIG ERROR] model_backend không hợp lệ: {backend}")
     
     pid = PIDController(Kp=pid_cfg["Kp"], Ki=pid_cfg["Ki"], Kd=pid_cfg["Kd"], max_integral=pid_cfg["max_integral"])
     

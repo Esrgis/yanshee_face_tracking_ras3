@@ -2,3 +2,5 @@ ultralytics>=8.1.0
 opencv-python==4.9.0.80
 opencv-contrib-python==4.9.0.80
 numpy==1.26.4
+onnx==1.15.0
+onnxruntime==1.17.0
