@@ -26,6 +26,10 @@ yanshee_visual_tracking/
 │   ├── __init__.py
 │   └── yanshee_interface.py    # Yanshee servo/SDK control class
 ├── models/                     # AI weights directory (.pt, .onnx)
+├── utils/                      # Utilities 
+│   ├── __init__.py
+|   ├── converter.py            # Convert file groundtruth to 
+│   └── evaluation.py           # 
 ├── data/                       # Mockup testing data (videos)
 ├── config.json                 # Centralized configuration file
 ├── main_tracker.py             # Main entry point script
@@ -79,3 +83,4 @@ Run the main script from the root directory:
 python main_tracker.py
 ```
 *(Press `q` on the video window to gracefully exit and save logs).*
+
