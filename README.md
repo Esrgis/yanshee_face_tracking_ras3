@@ -42,7 +42,21 @@ yanshee_visual_tracking/
 
 **Step 1:** Install python3.11
 
-**Step 2:** Install required dependencies:
+**Step 2:** Create a virtual environment
+
+On Linux/macOS:
+```bash
+python3.11 -m venv venv
+source venv/bin/activate
+```
+
+On Windows:
+```bash
+python3.11 -m venv venv
+venv\Scripts\activate
+```
+
+**Step 3:** Install required dependencies:
 ```bash
 pip install -r requirements.txt
 ```
