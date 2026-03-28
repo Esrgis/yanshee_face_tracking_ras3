@@ -43,21 +43,43 @@ def main():
     kalman = TrackerKalmanFilter(process_noise=kf_cfg["process_noise_cov"], measurement_noise=kf_cfg["measurement_noise_cov"])
     fsm = TrackingStateMachine(timeout_lost=rob_cfg["timeout_lost"])
     
+    # 3. KHỞI TẠO LUỒNG VIDEO VÀ HARDWARE MOCK
+    source_type = env_cfg.get("source_type", "video").lower()
+    
     robot = YansheeInterface(
-        is_simulation=not env_cfg["use_live_camera"], 
+        is_simulation=(source_type == "video"), # Nếu chạy file video thì chắc chắn là giả lập
         max_angle=rob_cfg["max_angle"], 
         min_angle=rob_cfg["min_angle"], 
         default_angle=rob_cfg["default_angle"]
     )
-
-    # 3. KHỞI TẠO LUỒNG VIDEO
-    if env_cfg["use_live_camera"]:
-        cap = cv2.VideoCapture(0)
-    else:
-        cap = cv2.VideoCapture(env_cfg["video_source"])
     
+    if source_type == "ip_camera":  # <--- ĐÂY LÀ PHẦN MỚI THÊM VÀO!
+        ip_url = env_cfg.get("ip_camera_url", "")
+        cap = cv2.VideoCapture(ip_url)
+        print(f"[INFO] Kích hoạt chế độ IP CAMERA (Robot Wi-Fi): {ip_url}")
+
+    elif source_type == "webcam":
+        cam_index = env_cfg.get("webcam_index", 0)
+        cap = cv2.VideoCapture(cam_index)
+        print(f"[INFO] Kích hoạt chế độ WEBCAM (Device Index: {cam_index})")
+        
+    elif source_type == "hdmi":
+        hdmi_index = env_cfg.get("hdmi_index", 1)
+        cap = cv2.VideoCapture(hdmi_index, cv2.CAP_DSHOW)
+        print(f"[INFO] Kích hoạt chế độ tham chiếu HDMI (Device Index: {hdmi_index})")
+        
+    elif source_type == "video":
+        video_path = env_cfg.get("video_path", "")
+        cap = cv2.VideoCapture(video_path)
+        print(f"[INFO] Kích hoạt chế độ VIDEO FILE: {video_path}")
+        
+        
+    else:
+        raise ValueError(f"[FATAL ERROR] Cấu hình source_type không hợp lệ: '{source_type}'. Chỉ chấp nhận: 'video', 'webcam', 'hdmi', 'ip_camera'.")
+    # Kiểm tra xem có mở được luồng ảnh không
     if not cap.isOpened():
-        print(f"[FATAL ERROR] Không thể mở video từ: {env_cfg['video_source']}")
+        print(f"[FATAL ERROR] Không thể mở luồng video từ nguồn: {source_type.upper()}")
+        print(" -> Mẹo: Nếu dùng HDMI/Webcam, thử đổi index (0, 1, 2...) trong file config.json.")
         return
 
     # 4. CHUẨN BỊ GHI LOG CSV (Đã sửa lại Header 13 cột chuẩn)

@@ -33,7 +33,10 @@
     "measurement_noise_cov": 0.1
   },
   "testing_env": {
-    "use_live_camera": false,
-    "video_source": "data/videos/videoplayback.mp4"
+    "source_type": "ip_camera", 
+    "video_path": "data/videos/videoplayback.mp4",
+    "ip_camera_url": "http://192.168.31.8:5000/video_feed",
+    "webcam_index": 0,
+    "hdmi_index": 1
   }
 }
