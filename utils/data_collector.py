@@ -5,15 +5,22 @@ from datetime import datetime
 from pathlib import Path
 
 class DataCollector:
-    def __init__(self, output_dir="../data/videos", fps=25, resolution=(640, 480)):
+    def __init__(self, output_dir=None, fps=25, resolution=(640, 480)):
         """
         Khởi tạo bộ thu thập dữ liệu từ camera
         
         Args:
-            output_dir: Đường dẫn thư mục lưu video
+            output_dir: Đường dẫn thư mục lưu video (mặc định: data/videos trong thư mục gốc dự án)
             fps: Số frame trên giây
             resolution: Độ phân giải (width, height)
         """
+        # Nếu không có output_dir, tính từ vị trí file data_collector.py
+        if output_dir is None:
+            # Lấy đường dẫn thư mục của file hiện tại (utils/)
+            current_file_dir = Path(__file__).parent.absolute()
+            # Lên 1 cấp (yanshee_visual_tracking/) rồi vào data/videos/
+            output_dir = current_file_dir.parent / "data" / "videos"
+        
         self.output_dir = Path(output_dir)
         self.output_dir.mkdir(parents=True, exist_ok=True)
         
@@ -236,11 +243,7 @@ class DataCollector:
 def main():
     """Hàm chính"""
     try:
-        collector = DataCollector(
-            output_dir="../data/videos",
-            fps=25,
-            resolution=(640, 480)
-        )
+        collector = DataCollector(fps=25, resolution=(640, 480))
         collector.run()
     except Exception as e:
         print(f"Lỗi: {e}")
