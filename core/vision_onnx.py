@@ -1,5 +1,6 @@
 import cv2
 import numpy as np
+import math
 from core.vision import VisionSystem
 
 IMGSZ = 640
@@ -8,7 +9,7 @@ class VisionONNX(VisionSystem):
     def __init__(self, model_path="models/yolov8n-face-lindevs.onnx", conf_threshold=0.5):
         self.conf_threshold = float(conf_threshold)
         self.imgsz = IMGSZ
-        print(f"[VISION INIT] Backend: ONNX | Model: {model_path}")
+        print(f"[VISION INIT] Backend: Thuần OpenCV DNN | Model: {model_path}")
         try:
             self.net = cv2.dnn.readNetFromONNX(model_path)
             self.net.setPreferableBackend(cv2.dnn.DNN_BACKEND_OPENCV)
@@ -31,7 +32,7 @@ class VisionONNX(VisionSystem):
         canvas[0:new_h, 0:new_w] = resized
         return canvas, scale
 
-    def _parse_detections(self, output, scale, orig_w, orig_h):
+    def _parse_detections(self, output, scale, orig_w, orig_h, prev_x, prev_y):
         detections = output[0].T
         boxes = []
         confidences = []
@@ -53,19 +54,43 @@ class VisionONNX(VisionSystem):
         if not boxes:
             return None
 
+        # Lọc các hộp chồng lấn (NMS)
         indices = cv2.dnn.NMSBoxes(boxes, confidences, self.conf_threshold, 0.45)
         if len(indices) == 0:
             return None
 
-        best_idx = None
-        best_conf = -1
+        best_box = None
+
+        # ---------------------------------------------------------
+        # LỌC NHIỄU BẰNG NEO KHÔNG GIAN (SPATIAL ANCHORING)
+        # ---------------------------------------------------------
+        # TRƯỜNG HỢP 1: Chưa có mục tiêu (Khởi động) -> Chọn mặt TO NHẤT
+        if prev_x == -1 or prev_y == -1:
+            max_area = 0
+            for i in indices:
+                idx = i[0] if isinstance(i, (list, tuple, np.ndarray)) else i
+                bw, bh = boxes[idx][2], boxes[idx][3]
+                area = bw * bh
+                if area > max_area:
+                    max_area = area
+                    best_box = boxes[idx]
+            return tuple(best_box) if best_box else None
+
+        # TRƯỜNG HỢP 2: Đã có mục tiêu -> Chọn mặt GẦN TỌA ĐỘ CŨ NHẤT
+        min_dist = float('inf')
         for i in indices:
             idx = i[0] if isinstance(i, (list, tuple, np.ndarray)) else i
-            if confidences[idx] > best_conf:
-                best_conf = confidences[idx]
-                best_idx = idx
+            bx, by, bw, bh = boxes[idx]
+            center_x = bx + bw // 2
+            center_y = by + bh // 2
+            
+            # Tính khoảng cách Euclid từ mặt này tới tọa độ Kalman dự đoán
+            dist = math.hypot(center_x - prev_x, center_y - prev_y)
+            if dist < min_dist:
+                min_dist = dist
+                best_box = boxes[idx]
 
-        return tuple(boxes[best_idx])
+        return tuple(best_box) if best_box else None
 
     def _init_tracker(self, frame, bbox):
         self.tracker = cv2.legacy.TrackerKCF_create()
@@ -73,7 +98,8 @@ class VisionONNX(VisionSystem):
         self.is_tracking = True
         self.bbox = bbox
 
-    def process_frame(self, frame):
+    def process_frame(self, frame, prev_x=-1, prev_y=-1):
+        """Đã cập nhật: Nhận mỏ neo prev_x, prev_y từ Kalman"""
         target_found = False
         center_x, center_y = -1, -1
         orig_h, orig_w = frame.shape[:2]
@@ -99,7 +125,10 @@ class VisionONNX(VisionSystem):
             self.net.setInput(blob)
             output = self.net.forward()
             inv_scale = 1.0 / scale
-            best_box = self._parse_detections(output, inv_scale, orig_w, orig_h)
+            
+            # Truyền mỏ neo không gian xuống khâu parse
+            best_box = self._parse_detections(output, inv_scale, orig_w, orig_h, prev_x, prev_y)
+            
             if best_box is not None:
                 self._init_tracker(frame, best_box)
                 target_found = True
