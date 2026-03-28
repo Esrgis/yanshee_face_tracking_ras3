@@ -1,16 +1,17 @@
-# Yanshee Visual Tracking System 🤖👁️
 
-## 📌 Overview
-This repository contains the core software stack for an intelligent, real-time visual tracking system designed for the Yanshee Robot (or any Pan-Tilt robotic head). The system solves the non-linear mechanical boundary problem and vision jitter by combining Deep Learning, Kalman Filtering, and a Finite State Machine (FSM).
+# Yanshee Visual Tracking System
 
-## 🧠 System Architecture
-The pipeline is designed with strict **Separation of Concerns** (Hardware Abstraction Layer):
-* **Vision System (`core/vision.py`, `vision_onnx.py`, `vision_ultralytics.py`):** Multi-backend support (YOLOv8/v12 via ONNX or PyTorch) + KCF Tracker (Cascade Tracking) to maintain high FPS on edge devices.
-* **Signal Filter (`core/filters.py`):** Kalman Filter predicts object trajectory during frame drops and smooths high-frequency camera jitter.
-* **Controller (`core/control.py`):** A custom PID controller strictly decoupled from frame rates (calculates real `dt`) with an Active Anti-Windup mechanism.
-* **State Machine (`core/state_machine.py`):** Manages 4 physical states (`TRACKING`, `SATURATED`, `SEARCH`, `LOST`) to prevent integral windup when the servo hits its mechanical boundaries.
+## Overview
+This repository contains the core software stack for an intelligent, real-time visual tracking system designed for the Yanshee Robot (and adaptable to general Pan-Tilt robotic platforms). The system addresses non-linear mechanical boundary constraints and visual jitter by integrating Deep Learning detection, Kalman Filtering, and a Finite State Machine (FSM).
 
-## 📂 Folder Structure
+## System Architecture
+The pipeline is designed with strict Separation of Concerns, isolating the algorithmic logic from the Hardware Abstraction Layer:
+* **Vision System (`core/vision_*.py`):** Multi-backend support (YOLOv8/v12 via ONNX or PyTorch) combined with a KCF Tracker (Cascade Tracking) to maintain high frame rates on edge devices.
+* **Signal Filter (`core/filters.py`):** Utilizes a Kalman Filter to predict object trajectories during frame drops and to smooth high-frequency spatial jitter.
+* **Controller (`core/control.py`):** A custom PID controller decoupled from frame rates (utilizing dynamic `dt` calculation), featuring an Active Anti-Windup mechanism.
+* **State Machine (`core/state_machine.py`):** Manages four physical states (`TRACKING`, `SATURATED`, `SEARCH`, `LOST`) to govern hardware safety and prevent integral windup when servos reach mechanical limits.
+
+## Repository Structure
 
 ```text
 yanshee_visual_tracking/
@@ -19,30 +20,30 @@ yanshee_visual_tracking/
 │   ├── vision.py               # Vision System Interface (ABC)
 │   ├── vision_onnx.py          # Vision backend using ONNX (Optimized for CPU)
 │   ├── vision_ultralytics.py   # Vision backend using PyTorch (.pt)
-│   ├── control.py              # PID Controller
+│   ├── control.py              # PID Controller implementation
 │   ├── filters.py              # Kalman & Moving Average Filters
-│   └── state_machine.py        # FSM (State Machine)
-├── hardware/                   # Hardware communication layer
+│   └── state_machine.py        # Tracking logic FSM
+├── hardware/                   # Hardware abstraction layer
 │   ├── __init__.py
-│   └── yanshee_interface.py    # Yanshee servo/SDK control class
+│   └── yanshee_interface.py    # Yanshee servo/SDK communication class
 ├── models/                     # AI weights directory (.pt, .onnx)
-├── utils/                      # Utilities 
+├── utils/                      # Evaluation and conversion utilities 
 │   ├── __init__.py
-|   ├── converter.py            # Convert file groundtruth to 
-│   └── evaluation.py           # 
-├── data/                       # Mockup testing data (videos)
+│   ├── converter.py            # Converts ground truth data formats
+│   └── evaluation.py           # Calculates metrics (IoU, RMSE, Stability)
+├── data/                       # Mockup testing data and logs
 ├── config.json                 # Centralized configuration file
 ├── main_tracker.py             # Main entry point script
 └── requirements.txt            # Environment dependencies
 ```
 
-## ⚙️ Environment Setup
+## Environment Setup
 
-**⚠️ CRITICAL WARNING:** The system relies on the KCF Tracker (a legacy OpenCV tracker). To avoid library conflicts, you **MUST NOT** install both `opencv-python` and `opencv-contrib-python` at the same time.
+**Note on dependencies:** The system relies on the legacy OpenCV KCF Tracker. To avoid library conflicts, ensure that `opencv-python` and `opencv-contrib-python` are not installed simultaneously in the same environment.
 
-**Step 1:** Install python3.11
+**Step 1:** Install Python 3.11.
 
-**Step 2:** Create a virtual environment
+**Step 2:** Create and activate a virtual environment.
 
 On Linux/macOS:
 ```bash
@@ -56,20 +57,20 @@ python3.11 -m venv venv
 venv\Scripts\activate
 ```
 
-**Step 3:** Install required dependencies:
+**Step 3:** Install required packages:
 ```bash
 pip install -r requirements.txt
 ```
-*(Key libraries: `opencv-contrib-python`, `ultralytics`, `onnx`, `onnxruntime`, `numpy`)*
+*(Key dependencies include: `opencv-contrib-python`, `ultralytics`, `onnx`, `onnxruntime`, and `numpy`).*
 
-## 🚀 Configuration & Usage
+## Configuration & Usage
 
-The system's behavior is fully controlled via `config.json`.
+The system's operational parameters are centralized within `config.json`.
 
-### 1. Switch AI Backend (Model)
-Open `config.json`, locate the `"camera"` block. You can easily hot-swap the model backend by changing `"model_backend"` and `"model_path"`:
+### 1. Model Backend Selection
+Locate the `"camera"` block in `config.json` to switch the active model backend:
 
-* **Use ONNX (Recommended for CPU/Edge Devices):**
+* **For ONNX (Recommended for CPU/Edge Devices):**
   ```json
   "camera": {
       "model_path": "models/yolov8n-face-lindevs.onnx",
@@ -77,7 +78,7 @@ Open `config.json`, locate the `"camera"` block. You can easily hot-swap the mod
       ...
   }
   ```
-* **Use Ultralytics (.pt):**
+* **For PyTorch (.pt):**
   ```json
   "camera": {
       "model_path": "models/yolov12n-face.pt",
@@ -86,15 +87,16 @@ Open `config.json`, locate the `"camera"` block. You can easily hot-swap the mod
   }
   ```
 
-### 2. Video Source Selection
-In `config.json`, find the `"testing_env"` block:
-* **Live Camera:** Set `"use_live_camera": true`
-* **Video File (Mocking):** Set `"use_live_camera": false` and update `"video_source"` to your video path (e.g., `"data/videos/videoplayback.mp4"`).
+### 2. Video Source Configuration
+Locate the `"testing_env"` block in `config.json`:
+* **Live Camera Interface:** Set `"use_live_camera": true`.
+* **Video File (Offline Mocking):** Set `"use_live_camera": false` and specify the path in `"video_source"` (e.g., `"data/videos/test_sequence.mp4"`).
 
-### 3. Run the Tracker
-Run the main script from the root directory:
+### 3. Execution
+Run the main tracking script from the root directory:
 ```bash
 python main_tracker.py
 ```
-*(Press `q` on the video window to gracefully exit and save logs).*
+*(Press `q` within the video window to terminate the process gracefully and save metric logs).*
+```
 
