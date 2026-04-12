@@ -9,7 +9,7 @@ Hệ thống theo dõi khuôn mặt tối ưu hóa cho thiết bị nhúng tài 
 
 ## Kiến trúc thư mục
 
-\`\`\`text
+```text
 ├── core/
 │   ├── vision_haarcascade.py  # Haar Cascade + KCF Tracker
 │   ├── adaptive_sheduler.py   # Thuật toán Adaptive Frame Skipping
@@ -27,13 +27,13 @@ Hệ thống theo dõi khuôn mặt tối ưu hóa cho thiết bị nhúng tài 
 ├── Makefile                   # Cấu hình lệnh chạy nhanh
 ├── config.json                # Cấu hình tham số hệ thống
 └── main_tracker_robot.py      # Script chạy thực tế trên Robot
-\`\`\`
+```
 
 ## Cài đặt
 
 Dự án yêu cầu **Python 3.5.3** (Để tương thích ngược với Yanshee SDK):
 
-\`\`\`bash
+```bash
 # 1. Tạo môi trường ảo
 python -m venv venv
 
@@ -43,7 +43,7 @@ python -m venv venv
 
 # 3. Cài đặt thư viện
 pip install -r requirements.txt
-\`\`\`
+```
 
 ## Hướng dẫn sử dụng (Qua Makefile)
 
@@ -51,23 +51,23 @@ Thay vì phải gõ lệnh dài dòng, dự án cung cấp các lệnh `make` ti
 
 ### 1. Thu thập dữ liệu nghiên cứu (Ablation Study)
 Chạy tự động 4 cấu hình (Config A, B, C, D) để so sánh hiệu năng của thuật toán.
-\`\`\`bash
+```bash
 make ablation
 # Tùy chỉnh tham số: make ablation SRC=video.mp4 DURATION=60 CONFIGS=ABCD
-\`\`\`
+```
 
 ### 2. Phân tích kết quả
 Đọc các file log CSV vừa sinh ra, tính toán các chỉ số (Recovery time, Mean Jitter, Tracking Rate) và xuất ra biểu đồ png.
-\`\`\`bash
+```bash
 make analyze
-\`\`\`
+```
 *(Kết quả sẽ nằm trong thư mục `results/figures/`)*
 
 ### 3. Deploy lên Robot Yanshee
 Chạy hệ thống nhận diện và điều khiển motor trong thực tế (Headless mode).
-\`\`\`bash
+```bash
 make robot
-\`\`\`
+```
 
 ## Các cấu hình Ablation (Ablation Configs)
 * **A_static_skip1:** Quét khuôn mặt ở mọi frame (Baseline nặng nhất).
