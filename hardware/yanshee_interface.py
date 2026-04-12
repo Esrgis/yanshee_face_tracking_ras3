@@ -2,28 +2,24 @@ import time
 
 class YansheeInterface:
     """
-    Lớp giao tiếp phần cứng (Hardware Abstraction Layer - HAL).
-    Cách ly hoàn toàn thuật toán điều khiển với thiết bị vật lý.
-    Cho phép test offline (Mocking) trên Laptop không cần robot thật.
+    Hardware interface & abstraction layer
     """
     def __init__(self, is_simulation=True, max_angle=180.0, min_angle=0.0, default_angle=90.0):
         self.is_simulation = is_simulation
         self.max_angle = float(max_angle)
         self.min_angle = float(min_angle)
         
-        # Trạng thái vật lý hiện tại của cổ robot
+        # Current angle
         self.current_angle = float(default_angle)
         
-        # Góc nhìn ngang của Camera (Field of View). 
-        # Cần đo lại thông số thực tế của camera Yanshee, giả định tạm là 60 độ.
+        # Camera FOV (Field of View): ~60 degrees
         self.CAMERA_FOV_H = 60.0 
 
         if self.is_simulation:
-            print("[HARDWARE INIT] Đang chạy chế độ GIẢ LẬP (Mocking) trên Laptop.")
+            print("[HARDWARE] Running in simulation mode")
         else:
-            print("[HARDWARE INIT] Đang kết nối với Cổng Serial/SDK của Yanshee...")
-            # TODO: Viết code khởi tạo SDK/Serial port ở đây
-            # Ví dụ: self.robot = YansheeAPI()
+            print("[HARDWARE] Connecting to Yanshee...")
+            # TODO: Init SDK or serial port
 
     def pixel_to_angle(self, error_x, frame_width):
         """
@@ -38,35 +34,26 @@ class YansheeInterface:
         if frame_width <= 0:
             return 0.0
         
-        # Công thức ánh xạ tuyến tính cơ bản từ FOV
+        # Map pixel to angle
         error_angle = (error_x * self.CAMERA_FOV_H) / frame_width
         return error_angle
 
     def set_head_angle(self, target_angle, current_state_name="TRACKING"):
-        """
-        Lệnh duy nhất trong toàn bộ hệ thống được phép tác động đến động cơ.
-        
-        :param target_angle: Góc đích muốn quay tới.
-        :param current_state_name: Tên của State Machine (Để in log debug).
-        """
-        # 1. Bảo vệ phần cứng lần cuối (Hard-Clamp)
-        # Bất chấp PID hay Kalman tính ra cái gì, không bao giờ cho phép vượt max/min
+        # Send angle command to motor
+        # Clamp angle to safe range
         safe_angle = max(min(target_angle, self.max_angle), self.min_angle)
         
-        # Cập nhật góc hiện tại của robot
+        # Update current angle
         self.current_angle = safe_angle
 
-        # 2. Xử lý xuất lệnh
+        # Send command
         if self.is_simulation:
-            # Chế độ Mock: Tuôn log ra Terminal để quan sát luồng FSM
-            print(f"[SERVO MOCK] State: {current_state_name:10} | Lệnh quay thực tế: {safe_angle:5.1f}°")
+            # Simulation mode
+            print(f"[SERVO] State: {current_state_name:10} | Angle: {safe_angle:5.1f}°")
         else:
-            # TODO: Đẩy lệnh `safe_angle` xuống SDK/Motor thật của Yanshee
-            # Ví dụ: self.robot.set_servo_angle(id=1, angle=safe_angle)
+            # TODO: Send command to motor
             pass
 
     def get_current_angle(self):
-        """
-        Trả về góc hiện tại để thuật toán PID có gốc tính toán.
-        """
+        # Get current motor angle
         return self.current_angle

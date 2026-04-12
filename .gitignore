@@ -18,18 +18,16 @@ env/
 *.engine
 
 # =========================================
-# DỮ LIỆU THỰC NGHIỆM & LOGS
-# Chỉ giữ lại thư mục rỗng, bỏ qua các file CSV và Video bên trong
-# =========================================
-data/logs/*.csv
-data/videos/*.mp4
-data/videos/*.avi
-*.log
-
-# =========================================
 # CẤU HÌNH IDE & HỆ ĐIỀU HÀNH
 # =========================================
 .vscode/
 .idea/
 .DS_Store
 Thumbs.db
+
+# Bỏ qua data sinh ra trong lúc chạy nghiên cứu
+results/logs/*.csv
+results/figures/*.png
+data/videos/*.mp4
+data/videos/*.avi
+

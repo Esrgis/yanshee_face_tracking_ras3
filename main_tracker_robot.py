@@ -16,7 +16,7 @@ def load_config(config_path="config.json"):
 
 def main():
     print("==================================================")
-    print(" [ON-EDGE] HỆ THỐNG YANSHEE TRACKING (HEADLESS)   ")
+    print(" YANSHEE FACE TRACKING SYSTEM")
     print("==================================================")
 
     config = load_config()
@@ -26,16 +26,16 @@ def main():
     pid_cfg = config["controller_pid"]
     kf_cfg = config["filter_kalman"]
 
-    # 1. KHỞI TẠO MODULE (ÉP DÙNG ONNX VÀ PHẦN CỨNG THẬT)
-    print("[INFO] Khởi tạo AI ONNX...")
+    # 1. Init modules
+    print("[INFO] Init vision...")
     vision = VisionONNX(model_path=cam_cfg["model_path"], conf_threshold=cam_cfg["conf_threshold"])
     
     pid = PIDController(Kp=pid_cfg["Kp"], Ki=pid_cfg["Ki"], Kd=pid_cfg["Kd"], max_integral=pid_cfg["max_integral"])
     kalman = TrackerKalmanFilter(process_noise=kf_cfg["process_noise_cov"], measurement_noise=kf_cfg["measurement_noise_cov"])
     fsm = TrackingStateMachine(timeout_lost=rob_cfg["timeout_lost"])
     
-    # BẮT BUỘC KHÔNG GIẢ LẬP: is_simulation = False
-    print("[INFO] Khởi tạo giao tiếp Motor Yanshee...")
+    # Use real hardware (not simulation)
+    print("[INFO] Init robot...")
     robot = YansheeInterface(
         is_simulation=False, 
         max_angle=rob_cfg["max_angle"], 
@@ -43,18 +43,18 @@ def main():
         default_angle=rob_cfg["default_angle"]
     )
 
-    # 2. KHỞI TẠO LUỒNG CAMERA VẬT LÝ (/dev/video0)
-    print("[INFO] Mở Camera phần cứng...")
+    # 2. Init camera
+    print("[INFO] Init camera...")
     cap = cv2.VideoCapture(0)
-    # Ép kích thước nhỏ ngay từ phần cứng để giảm tải CPU RPi
+    # Set resolution at hardware
     cap.set(cv2.CAP_PROP_FRAME_WIDTH, cam_cfg["frame_width"])
     cap.set(cv2.CAP_PROP_FRAME_HEIGHT, cam_cfg["frame_height"])
 
     if not cap.isOpened():
-        print("[FATAL ERROR] Không thể mở Camera phần cứng trên Robot!")
+        print("[ERROR] Cannot open camera!")
         return
 
-    # 3. CHUẨN BỊ LOG CSV (Chạy mù nên Log là thứ sống còn)
+    # 3. Setup CSV logging
     csv_file = None
     csv_writer = None
     if sys_cfg["log_csv"]:
@@ -68,8 +68,7 @@ def main():
     kalman_initialized = False
     search_frame_counter = 0
 
-    print("\n[SYSTEM] HỆ THỐNG ĐÃ SẴN SÀNG. VÒNG LẶP ĐANG CHẠY NGẦM...")
-    print("Nhấn CTRL+C trên Terminal để dừng hệ thống.\n")
+    print("\n[INFO] System ready. Press CTRL+C to stop.\n")
 
     try:
         while True:
@@ -80,20 +79,19 @@ def main():
             ret, frame = cap.read()
             if not ret: continue
             
-            # Khung hình thu từ Pi Camera thường bị lật, nếu bị ngược trái phải thì mở comment dòng dưới:
-            # frame = cv2.flip(frame, 1) 
+            # Flip frame if needed: frame = cv2.flip(frame, 1) 
 
             frame_count += 1
             frame_center_x = cam_cfg["frame_width"] // 2
 
-            # --- THỊ GIÁC (VISION) ---
+            # Vision
             t_vision_start = time.time()
             anchor_x, anchor_y = -1, -1
             if kalman_initialized:
                 pred_x, pred_y = kalman.predict() 
                 anchor_x, anchor_y = int(pred_x), int(pred_y)
 
-            # Frame Skipping (Giảm tải RPi)
+            # Skip frames if searching
             if fsm.get_state() == RobotState.SEARCH:
                 search_frame_counter += 1
                 if search_frame_counter % 3 == 0:
@@ -112,7 +110,7 @@ def main():
             filtered_x = center_x
             jitter = 0.0
 
-            # --- LỌC & ĐIỀU KHIỂN ---
+            # Filter & Control
             t_control_start = time.time()
             if sys_cfg["use_kalman"]:
                 if target_found:
@@ -143,7 +141,7 @@ def main():
             
             control_time_ms = (time.time() - t_control_start) * 1000
 
-            # --- XUẤT LỆNH HARDWARE THỰC TẾ ---
+            # Send command to hardware
             if new_state == RobotState.SATURATED:
                 pid.reset_memory() 
                 clamped_angle = max(min(predicted_angle, rob_cfg["max_angle"]), rob_cfg["min_angle"])
@@ -157,25 +155,25 @@ def main():
                 robot.set_head_angle(rob_cfg["default_angle"], new_state.name)
                 kalman_initialized = False 
 
-            # --- GHI LOG (Bỏ hoàn toàn Hiển thị UI) ---
+            # Logging (no UI)
             fps = 1.0 / dt if dt > 0 else 0.0
             if csv_writer:
                 csv_writer.writerow([frame_count, new_state.name, box_x, box_y, box_w, box_h, int(filtered_x), round(error_angle, 2), round(control_output, 2), round(vision_time_ms, 2), round(control_time_ms, 2), round(fps, 2), round(jitter, 2)])
 
-            # In log ra terminal thay vì màn hình video (Cứ mỗi 10 frame in 1 lần cho đỡ rác Terminal)
+            # Print log every 10 frames
             if frame_count % 10 == 0:
-                print(f"[Run] Frame: {frame_count} | State: {new_state.name} | FPS: {fps:.1f} | Vision: {vision_time_ms:.1f}ms")
+                print("[Run] Frame: {0} | State: {1} | FPS: {2:.1f} | Vision: {3:.1f}ms".format(frame_count, new_state.name, fps, vision_time_ms))
 
     except KeyboardInterrupt:
-        print("\n[INFO] Đã nhận lệnh ngắt từ bàn phím (CTRL+C). Tắt hệ thống...")
+        print("\n[INFO] Shutting down...")
 
     finally:
-        # Dọn dẹp tài nguyên an toàn
+        # Cleanup
         cap.release()
         if csv_file:
             csv_file.close()
-            print(f"[INFO] Đã lưu dữ liệu log tại: {sys_cfg['csv_file_path']}")
-        # Đưa robot về vị trí nghỉ ngơi
+            print(f"[INFO] Log saved to: {sys_cfg['csv_file_path']}")
+        # Return to default position
         robot.set_head_angle(rob_cfg["default_angle"], "SHUTDOWN")
 
 if __name__ == "__main__":

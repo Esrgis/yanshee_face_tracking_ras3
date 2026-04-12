@@ -1,15 +1,9 @@
 from abc import ABC, abstractmethod
 
 class VisionSystem(ABC):
-    """
-    Interface chung cho tất cả backend Vision.
-    Không bao giờ sửa file này khi thêm backend mới.
-    """
+    # Interface cho tất cả vision backend
     @abstractmethod
-    def process_frame(self, frame):
-        """
-        Đầu vào : frame BGR (numpy array)
-        Đầu ra  : (target_found, bbox, center_x, center_y)
-                   bool          tuple  int         int
-        """
+    def process_frame(self, frame, prev_x=-1, prev_y=-1):
+        # Input: frame, prev_x, prev_y
+        # Output: (target_found, bbox, center_x, center_y)
         pass

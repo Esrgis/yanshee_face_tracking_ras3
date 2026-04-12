@@ -1,42 +1,45 @@
 {
   "system": {
-    "use_pid": true,
     "use_kalman": true,
-    "use_smooth": false,
-    "log_csv": true,
-    "csv_file_path": "data/logs/experiment_log.csv"
+    "display_ui": true,
+    "log_csv": true
   },
   "camera": {
-    "model_path": "models/yolov8n-face-lindevs.onnx",
-    "model_backend": "onnx",
-    "frame_width": 320,
-    "frame_height": 240,
-    "target_fps": 10,
-    "conf_threshold": 0.5,
-    "bbox_min_size": 40
+    "cascade_path": "haarcascade_frontalface_default.xml",
+    "frame_width": 640,
+    "frame_height": 480,
+    "detection_skip_frames": 3
+  },
+  "adaptive_scheduler": {
+    "enabled": true,
+    "base_skip": 5,
+    "min_skip": 1,
+    "max_skip": 15,
+    "alpha": 0.08,
+    "beta": 0.05,
+    "velocity_window": 5
   },
   "robot_yanshee": {
-    "max_angle": 180.0,
-    "min_angle": 0.0,
-    "default_angle": 90.0,
-    "backoff_delta": 5.0,
-    "timeout_lost": 3.0
+    "max_angle": 45,
+    "min_angle": -45,
+    "timeout_lost": 3.0,
+    "lost_frame_threshold": 5,
+    "default_angle": 0,
+    "backoff_delta": 5
   },
   "controller_pid": {
     "Kp": 0.05,
     "Ki": 0.0,
     "Kd": 0.01,
-    "max_integral": 50.0
+    "max_integral": 50.0,
+    "deadzone": 2.0,
+    "output_limit": 15.0
   },
   "filter_kalman": {
     "process_noise_cov": 0.03,
     "measurement_noise_cov": 0.1
   },
   "testing_env": {
-    "source_type": "ip_camera", 
-    "video_path": "data/videos/videoplayback.mp4",
-    "ip_camera_url": "http://192.168.31.8:5000/video_feed",
-    "webcam_index": 0,
-    "hdmi_index": 1
+    "webcam_index": 0
   }
 }
