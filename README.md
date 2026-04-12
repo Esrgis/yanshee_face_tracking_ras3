@@ -1,86 +1,76 @@
-# Yanshee Face Tracking System
+# Yanshee Face Tracking: Adaptive Detection Scheduler
 
-Hệ thống theo dõi khuôn mặt sử dụng Haar Cascade và KCF tracker cho robot Yanshee.
+Hệ thống theo dõi khuôn mặt tối ưu hóa cho thiết bị nhúng tài nguyên thấp (Raspberry Pi 3) trên robot Yanshee. Dự án đề xuất và đánh giá một bộ định tuyến nhảy khung hình thích nghi (**Adaptive Detection Scheduler**), kết hợp với Haar Cascade và KCF Tracker.
 
-## Tính năng chính
+## Đóng góp chính
+- **Adaptive Detection Scheduler:** Tự động điều chỉnh tần suất quét khuôn mặt (detection skip) dựa trên vận tốc mục tiêu và độ rung nhiễu (jitter), giúp duy trì FPS cao trên cấu hình yếu.
+- **Ablation Study Framework:** Tích hợp bộ công cụ tự động chạy các kịch bản so sánh, trích xuất metrics (Recovery time, Jitter, FPS) và vẽ biểu đồ phân tích.
+- **Kiến trúc Pipeline:** Kết hợp Tracking-by-detection, Bộ lọc Kalman (mượt mà hóa quỹ đạo) và Bộ điều khiển PID (điều khiển Servo robot).
 
-- Phát hiện khuôn mặt bằng Haar Cascade Classifier
-- Theo dõi ổn định bằng KCF tracker
-- Điều khiển PID cho robot
-- Bộ lọc Kalman để làm mượt
-- Máy trạng thái để quản lý hành vi
+## Kiến trúc thư mục
+
+\`\`\`text
+├── core/
+│   ├── vision_haarcascade.py  # Haar Cascade + KCF Tracker
+│   ├── adaptive_sheduler.py   # Thuật toán Adaptive Frame Skipping
+│   ├── filters.py             # Kalman Filter
+│   ├── control.py             # PID Controller
+│   └── state_machine.py       # FSM (SEARCH, TRACK, LOST)
+├── hardware/
+│   └── yanshee_interface.py   # Giao tiếp với API của robot Yanshee
+├── scripts/
+│   ├── run_ablation.py        # Chạy 4 config so sánh hiệu năng
+│   └── analyze_results.py     # Đọc CSV và vẽ biểu đồ Matplotlib
+├── results/
+│   ├── logs/                  # Chứa file CSV xuất ra từ Ablation
+│   └── figures/               # Chứa biểu đồ kết quả (fig1..fig4)
+├── Makefile                   # Cấu hình lệnh chạy nhanh
+├── config.json                # Cấu hình tham số hệ thống
+└── main_tracker_robot.py      # Script chạy thực tế trên Robot
+\`\`\`
 
 ## Cài đặt
 
-```bash
+Dự án yêu cầu **Python 3.5.3** (Để tương thích ngược với Yanshee SDK):
+
+\`\`\`bash
+# 1. Tạo môi trường ảo
+python -m venv venv
+
+# 2. Kích hoạt môi trường (Windows)
+.\venv\Scripts\activate.ps1
+# (Hoặc trên Linux/Raspberry Pi): source venv/bin/activate
+
+# 3. Cài đặt thư viện
 pip install -r requirements.txt
-```
+\`\`\`
 
-## Chạy thử nghiệm
+## Hướng dẫn sử dụng (Qua Makefile)
 
-```bash
-# Chạy với camera và hiển thị video
-python main_tracker.py
+Thay vì phải gõ lệnh dài dòng, dự án cung cấp các lệnh `make` tiện lợi:
 
-# Chạy trên robot Yanshee (headless)
-python main_tracker_robot.py
-```
+### 1. Thu thập dữ liệu nghiên cứu (Ablation Study)
+Chạy tự động 4 cấu hình (Config A, B, C, D) để so sánh hiệu năng của thuật toán.
+\`\`\`bash
+make ablation
+# Tùy chỉnh tham số: make ablation SRC=video.mp4 DURATION=60 CONFIGS=ABCD
+\`\`\`
 
-## Cấu hình
+### 2. Phân tích kết quả
+Đọc các file log CSV vừa sinh ra, tính toán các chỉ số (Recovery time, Mean Jitter, Tracking Rate) và xuất ra biểu đồ png.
+\`\`\`bash
+make analyze
+\`\`\`
+*(Kết quả sẽ nằm trong thư mục `results/figures/`)*
 
-Chỉnh sửa file `config.json`:
+### 3. Deploy lên Robot Yanshee
+Chạy hệ thống nhận diện và điều khiển motor trong thực tế (Headless mode).
+\`\`\`bash
+make robot
+\`\`\`
 
-```json
-{
-  "camera": {
-    "cascade_path": "haarcascade_frontalface_default.xml",
-    "frame_width": 640,
-    "frame_height": 480
-  },
-  "controller_pid": {
-    "Kp": 0.05,
-    "Ki": 0.0,
-    "Kd": 0.01
-  },
-  "robot_yanshee": {
-    "max_angle": 180,
-    "min_angle": 0,
-    "default_angle": 90
-  }
-}
-```
-
-## Cấu trúc thư mục
-
-```
-├── main_tracker.py          # Script chính với UI
-├── main_tracker_robot.py    # Script cho robot (headless)
-├── config.json              # Cấu hình hệ thống
-├── requirements.txt         # Dependencies
-├── core/                    # Core modules
-│   ├── vision.py           # Interface vision
-│   ├── vision_haarcascade.py # Haar Cascade detector
-│   ├── control.py          # PID controller
-│   ├── filters.py          # Kalman filter
-│   └── state_machine.py    # State machine
-├── hardware/               # Hardware interfaces
-│   ├── yanshee_interface.py # Robot interface
-│   └── cam_stream.py       # Camera streaming
-├── utils/                  # Utilities
-└── data/                   # Data và logs
-```
-
-## Cách hoạt động
-
-1. **Vision**: Phát hiện khuôn mặt bằng Haar Cascade, theo dõi bằng KCF
-2. **Control**: Tính toán lỗi vị trí, điều khiển PID
-3. **Filter**: Lọc nhiễu bằng Kalman filter
-4. **State Machine**: Quản lý trạng thái (TRACKING, SEARCH, LOST, etc.)
-
-## Test
-
-```bash
-# Test Haar Cascade detector
-python test_haar.py
-```
-
+## Các cấu hình Ablation (Ablation Configs)
+* **A_static_skip1:** Quét khuôn mặt ở mọi frame (Baseline nặng nhất).
+* **B_static_skip5:** Cố định bỏ qua 5 frame (Baseline nhẹ).
+* **C_adaptive_vel_only:** Nhảy frame thích nghi dựa trên vận tốc mục tiêu (Beta = 0).
+* **D_adaptive_full:** Nhảy frame thích nghi dựa trên cả vận tốc và độ rung nhiễu (Proposed Method).
