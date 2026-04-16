@@ -1,59 +1,57 @@
 import time
+import threading
+
+try:
+    import queue
+except ImportError:
+    import Queue as queue # Dành cho Python 2/3.5 compatibility
 
 class YansheeInterface:
-    """
-    Hardware interface & abstraction layer
-    """
-    def __init__(self, is_simulation=True, max_angle=180.0, min_angle=0.0, default_angle=90.0):
+    def __init__(self, config_dict, is_simulation=True):
         self.is_simulation = is_simulation
-        self.max_angle = float(max_angle)
-        self.min_angle = float(min_angle)
+        self.use_thread = config_dict.get("use_multithreading", True)
+        self.current_angle = 0.0
         
-        # Current angle
-        self.current_angle = float(default_angle)
-        
-        # Camera FOV (Field of View): ~60 degrees
-        self.CAMERA_FOV_H = 60.0 
-
-        if self.is_simulation:
-            print("[HARDWARE] Running in simulation mode")
+        # Thiết lập hàng đợi (Queue)
+        if self.use_thread:
+            # maxsize=1 là chìa khóa chống delay tích lũy
+            self.angle_queue = queue.Queue(maxsize=1) 
+            self.thread = threading.Thread(target=self._servo_worker)
+            self.thread.daemon = True # Thread tự chết khi chương trình chính tắt
+            self.thread.start()
+            print("[HARDWARE] Started in MULTI-THREAD mode")
         else:
-            print("[HARDWARE] Connecting to Yanshee...")
-            # TODO: Init SDK or serial port
+            print("[HARDWARE] Started in SINGLE-THREAD mode")
 
-    def pixel_to_angle(self, error_x, frame_width):
-        """
-        BƯỚC TIỀN XỬ LÝ SỐNG CÒN:
-        Chuyển đổi sai số từ Pixel sang Góc (Độ).
-        Giúp hệ số PID (Kp, Ki, Kd) giữ nguyên ý nghĩa vật lý dù đổi độ phân giải camera.
+    def set_head_angle(self, target_angle):
+        safe_angle = max(min(target_angle, 45), -45)
         
-        :param error_x: Sai số vị trí x tính bằng pixel.
-        :param frame_width: Chiều rộng khung hình camera (Ví dụ: 320).
-        :return: Sai số tính bằng độ.
-        """
-        if frame_width <= 0:
-            return 0.0
-        
-        # Map pixel to angle
-        error_angle = (error_x * self.CAMERA_FOV_H) / frame_width
-        return error_angle
-
-    def set_head_angle(self, target_angle, current_state_name="TRACKING"):
-        # Send angle command to motor
-        # Clamp angle to safe range
-        safe_angle = max(min(target_angle, self.max_angle), self.min_angle)
-        
-        # Update current angle
-        self.current_angle = safe_angle
-
-        # Send command
-        if self.is_simulation:
-            # Simulation mode
-            print(f"[SERVO] State: {current_state_name:10} | Angle: {safe_angle:5.1f}°")
+        if self.use_thread:
+            # --- ĐA LUỒNG ---
+            # Nếu hộp thư đã có lệnh cũ chưa kịp gửi, ném nó đi
+            if self.angle_queue.full():
+                try: self.angle_queue.get_nowait()
+                except queue.Empty: pass
+            # Bỏ lệnh mới nhất vào hộp thư
+            self.angle_queue.put(safe_angle)
         else:
-            # TODO: Send command to motor
+            # --- ĐƠN LUỒNG ---
+            self._send_to_hardware(safe_angle)
+            
+    def _servo_worker(self):
+        """Luồng phụ chuyên chầu chực lấy góc từ Queue để gửi I/O"""
+        while True:
+            # Chờ đến khi có lệnh trong hàng đợi
+            angle = self.angle_queue.get() 
+            self._send_to_hardware(angle)
+            self.angle_queue.task_done()
+
+    def _send_to_hardware(self, angle):
+        """Hàm giao tiếp Yanshee API (Hàm chặn / Blocking Call)"""
+        self.current_angle = angle
+        if self.is_simulation:
+            # print giả lập
             pass
-
-    def get_current_angle(self):
-        # Get current motor angle
-        return self.current_angle
+        else:
+            # TODO: Gọi API gửi xuống motor (Tốn 100ms ở đây)
+            pass
