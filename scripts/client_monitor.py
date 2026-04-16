@@ -35,8 +35,14 @@ def main():
             msg_size = struct.unpack(">L", packed_msg_size)[0]
             
             # Nhận đủ dữ liệu của một khung hình JPEG
-            while len(data) < msg_size:
-                data += client_socket.recv(4096)
+            # Nhận độ dài của khung hình (4 bytes)
+            while len(data) < payload_size:
+                packet = client_socket.recv(4096)
+                if not packet: 
+                    # NẾU KHÔNG CÓ GÓI TIN, BÁO LỖI VÀ THOÁT CHỨ KHÔNG ĐỂ VĂNG UNPACK ERROR
+                    print("\n[CLIENT] ROBOT DA NGAT KET NOI HOAC DUNG TRUYEN DATA!")
+                    return 
+                data += packet
                 
             frame_data = data[:msg_size]
             data = data[msg_size:]

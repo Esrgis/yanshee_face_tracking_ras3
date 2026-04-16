@@ -51,6 +51,16 @@ def main():
     print("[SERVER] Laptop {} da ket noi!".format(addr))
     
     cap = cv2.VideoCapture(0)
+    
+    # --- ĐOẠN KIỂM TRA CAMERA MỚI THÊM VÀO ---
+    if not cap.isOpened():
+        print("\n[SERVER ERROR] KHONG THE MO CAMERA!")
+        print("Hay kiem tra xem co file nao khac dang chiem camera (Device Busy) khong.")
+        conn.close()
+        server_socket.close()
+        return
+    # ----------------------------------------
+        
     cap.set(cv2.CAP_PROP_FRAME_WIDTH, W_STREAM)
     cap.set(cv2.CAP_PROP_FRAME_HEIGHT, H_STREAM)
     
