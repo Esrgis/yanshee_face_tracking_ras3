@@ -4,7 +4,7 @@
     "display_ui": true,
     "log_csv": true
   },
-  "vision_benchmark": {
+"vision_benchmark": {
     "active_model": "haarcascade", 
     "models": {
       "haarcascade": "haarcascade_frontalface_default.xml",
@@ -14,8 +14,10 @@
         "weights": "opencv_face_detector_uint8.pb"
       }
     },
-    "frame_width": 640,
-    "frame_height": 480
+    "frame_width": 320,
+    "frame_height": 240,
+    "pad_ratio": 0.25, 
+    "iou_reinit_threshold": 0.4
   },
   "scheduler_ablation": {
     "active_config": "D",
@@ -51,5 +53,13 @@
   },
   "testing_env": {
     "webcam_index": 0
+  },
+  "camera": {
+    "cascade_path": "haarcascade_frontalface_default.xml",
+    "frame_width": 320,
+    "frame_height": 240,
+    "detection_skip_frames": 5,
+    "pad_ratio": 0.25, 
+    "iou_reinit_threshold": 0.4
   }
 }

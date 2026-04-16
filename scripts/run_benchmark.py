@@ -27,7 +27,7 @@ import sys
 
 W, H    = 640, 480
 LOG_DIR = "results/logs"
-CLIPS   = ["slow", "normal", "fast"]
+CLIPS = ["slow", "normal", "fast", "scale"]
 
 
 # ------------------------------------------------------------------
