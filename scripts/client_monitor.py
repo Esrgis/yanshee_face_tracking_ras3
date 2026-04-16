@@ -47,15 +47,22 @@ def main():
             frame_data = data[:msg_size]
             data = data[msg_size:]
             
-            # Giải mã và hiển thị
-            frame = cv2.imdecode(np.frombuffer(frame_data, np.uint8), cv2.IMREAD_COLOR)
+            # --- ĐOẠN SỬA ĐỂ TRÁNH LỖI ASSERTION FAILED ---
+            # Chuyển dữ liệu byte sang mảng numpy
+            np_data = np.frombuffer(frame_data, dtype=np.uint8)
+            # Giải mã ảnh JPEG
+            frame = cv2.imdecode(np_data, cv2.IMREAD_COLOR)
             
-            # Vẽ giao diện Hướng dẫn
-            cv2.putText(frame, "MONITOR MODE - Nhin qua mat Robot", (10, 20), 
+            # KIỂM TRA: Nếu giải mã lỗi (frame là None) thì bỏ qua frame này, không imshow
+            if frame is None or frame.size == 0:
+                print("[CLIENT] Canh bao: Frame bi loi duong truyen, dang bo qua...")
+                continue 
+            # ----------------------------------------------
+
+            # Vẽ giao diện và hiển thị (chỉ chạy khi frame hợp lệ)
+            cv2.putText(frame, "MONITOR MODE", (10, 20), 
                         cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 255, 0), 1)
-            cv2.putText(frame, "Nhan [G] de ACTION!", (10, 220), 
-                        cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0, 0, 255), 2)
-                        
+            
             cv2.imshow("Director Monitor", frame)
             
             # Bắt sự kiện phím
