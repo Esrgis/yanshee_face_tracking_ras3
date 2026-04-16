@@ -32,6 +32,7 @@
     "velocity_window": 5
   },
   "robot_yanshee": {
+    "use_multithreading": true,
     "max_angle": 45,
     "min_angle": -45,
     "timeout_lost": 3.0,
