@@ -4,6 +4,8 @@ import json
 import csv
 import os
 
+from flask import config
+
 from core.control import PIDController
 from core.filters import TrackerKalmanFilter
 from core.state_machine import TrackingStateMachine, RobotState
@@ -25,6 +27,7 @@ def main():
     # Đọc config, fallback an toàn nếu thiếu key
     config = load_config()
     sys_cfg = config.get("system", {"log_csv": True, "csv_file_path": "results/logs/robot_tracking.csv", "use_kalman": True, "use_pid": True})
+    # CODE CŨ (Xóa đoạn này)
     cam_cfg = config.get("camera", {"cascade_path": "haarcascade_frontalface_default.xml", "frame_width": 320, "frame_height": 240})
     rob_cfg = config.get("robot_yanshee", {"timeout_lost": 2.0, "max_angle": 180, "min_angle": 0, "default_angle": 90, "backoff_delta": 2})
     pid_cfg = config.get("controller_pid", {"Kp": 0.05, "Ki": 0.0, "Kd": 0.01, "max_integral": 10})
@@ -32,7 +35,13 @@ def main():
 
     # 1. Init Vision & Scheduler
     print("[INFO] Init vision & adaptive scheduler...")
-    vision = VisionHaarKCF(cascade_path=cam_cfg.get("cascade_path", "haarcascade_frontalface_default.xml"), skip=5)
+    # Mở file main_tracker_robot.py và cập nhật dòng khởi tạo vision:
+    vision = VisionHaarKCF(
+    cascade_path=cam_cfg.get("cascade_path", "haarcascade_frontalface_default.xml"),
+    skip=cam_cfg.get("detection_skip_frames", 5),
+    pad_ratio=cam_cfg.get("pad_ratio", 0.20),
+    iou_reinit_threshold=cam_cfg.get("iou_reinit_threshold", 0.5)
+    )
     sched = AdaptiveScheduler(enabled=True, base_skip=5, alpha=0.08, beta=0.05)
 
     pid = PIDController(Kp=pid_cfg["Kp"], Ki=pid_cfg["Ki"], Kd=pid_cfg["Kd"], max_integral=pid_cfg["max_integral"])

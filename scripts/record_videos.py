@@ -16,6 +16,7 @@ Huong dan:
   - slow  : nguoi di cham, quay mat nhe
   - normal: di binh thuong
   - fast  : di nhanh, xoay dau nhanh
+  - scale : dung im, tien sat vao camera roi lui ra xa lien tuc
 """
 from __future__ import print_function
 import cv2
@@ -25,7 +26,7 @@ import time
 
 W, H  = 640, 480
 FPS   = 20
-CLIPS = ["slow", "normal", "fast"]
+CLIPS = ["slow", "normal", "fast", "scale"]
 
 
 def record_one(name, source, duration, out_dir):
