@@ -153,7 +153,7 @@ class VisionHaarKCF(object):
                 best = self._best(faces)
                 if best is not None:
                     pad = self._pad(best, frame.shape)
-                    if not self.is_tracking or self.bbox is None or                        self._iou(self.bbox, pad) < self.iou_thr:
+                    if not self.is_tracking or self.bbox is None or self._iou(self.bbox, pad) < self.iou_thr:
                         self._init(frame, pad)
                     if self.bbox is None: self.bbox = pad
                     found = True

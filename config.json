@@ -1,22 +1,32 @@
 {
-  "system": {
+ "system": {
     "use_kalman": true,
     "display_ui": true,
     "log_csv": true
   },
-  "camera": {
-    "cascade_path": "haarcascade_frontalface_default.xml",
+  "vision_benchmark": {
+    "active_model": "haarcascade", 
+    "models": {
+      "haarcascade": "haarcascade_frontalface_default.xml",
+      "lbp": "lbpcascade_frontalface_improved.xml",
+      "ssd": {
+        "prototxt": "opencv_face_detector.pbtxt",
+        "weights": "opencv_face_detector_uint8.pb"
+      }
+    },
     "frame_width": 640,
-    "frame_height": 480,
-    "detection_skip_frames": 3
+    "frame_height": 480
   },
-  "adaptive_scheduler": {
-    "enabled": true,
-    "base_skip": 5,
+  "scheduler_ablation": {
+    "active_config": "D",
+    "configs": {
+      "A": {"base_skip": 1, "alpha": 0.0, "beta": 0.0},
+      "B": {"base_skip": 5, "alpha": 0.0, "beta": 0.0},
+      "C": {"base_skip": 5, "alpha": 0.08, "beta": 0.0},
+      "D": {"base_skip": 5, "alpha": 0.08, "beta": 0.05}
+    },
     "min_skip": 1,
     "max_skip": 15,
-    "alpha": 0.08,
-    "beta": 0.05,
     "velocity_window": 5
   },
   "robot_yanshee": {
