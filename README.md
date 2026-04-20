@@ -47,12 +47,12 @@ Camera Frame
 
 **Công thức:**
 
-$$skip(t) = \text{clip}\left( \frac{\text{base\_skip}}{1 + \alpha \cdot \text{velocity} + \beta \cdot \text{jitter}}, \text{min\_skip}, \text{max\_skip} \right)$$
+`skip(t) = clip( base_skip / (1 + α·velocity + β·jitter), min_skip, max_skip )`
 
 | Tham số | Ý nghĩa |
 |---------|---------|
-| $\alpha = 0.08$ | Target di chuyển nhanh → detect thường hơn |
-| $\beta = 0.05$ | Tracker bất ổn (jitter cao) → re-anchor sớm hơn |
+| `α = 0.08` | Target di chuyển nhanh → detect thường hơn |
+| `β = 0.05` | Tracker bất ổn (jitter cao) → re-anchor sớm hơn |
 | `base_skip = 5` | Điểm xuất phát khi target đứng yên |
 
 Khi FSM ở trạng thái SEARCH/LOST/SATURATED → scheduler override cứng về `skip=1` (detect mọi frame để tìm lại target).
@@ -202,7 +202,7 @@ python main_tracker.py
 | `tracking_rate` | frames_found / total_frames |
 | `system_fps` | FPS của toàn vòng lặp (bao gồm IO, scheduler, inference, render) |
 | `inference_fps_theoretical` | 1000 / inference_ms_mean (chỉ `process_frame()`) |
-| `jitter` | $|cx_{\text{raw}} - cx_{\text{filtered}}|$ — undefined (không phải 0) khi lost |
+| `jitter` | `|cx_raw − cx_filtered|` — undefined (không phải 0) khi lost |
 | `scheduled_detection_successes` | Số lần detector chạy VÀ tìm thấy mặt — observable scheduler outcome |
 | `iou_mean` | Tính trên toàn bộ GT frames; FN đóng góp 0 (detection-aware) |
 
