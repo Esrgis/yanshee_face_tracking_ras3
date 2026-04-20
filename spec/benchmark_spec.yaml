@@ -1,0 +1,87 @@
+version: "1.0"
+last_updated_by: "Architect Dude"
+
+input:
+  videos_dir: "data/videos"
+  annotations_dir: "data/annotations"
+  clips: [slow, normal, fast, scale]
+  detectors: [haar, lbp, ssd]
+  resolution: [640, 480]
+  cap_set:
+    width: 3
+    height: 4
+    mjpeg: 38
+
+ground_truth:
+  format: "JSON"
+  key_type: "string frame index"
+  schema: '{"frames": {"1": [x,y,w,h], ...}}'
+  missing_file: "skip IoU gracefully, iou = -1.0"
+  missing_frame_key: "skip IoU for that frame"
+
+iou:
+  definition: "detection-aware"
+  fn_penalty: 0.0
+  fp_background: "not counted"
+  note: "computed over all GT frames; FN contributes 0"
+
+precision_recall:
+  assumption: "single-object per frame"
+  tp_condition: "iou >= threshold"
+  fp_condition: "iou < threshold OR detect on background"
+  fn_condition: "GT exists, no detection"
+  tn: "ignored"
+  threshold: 0.5
+
+metrics:
+  per_frame_csv:
+    - frame
+    - found
+    - cx
+    - cy
+    - inference_ms
+    - fps
+    - ram_mb
+    - iou
+    - detector
+    - clip
+
+  summary_csv:
+    - detector
+    - clip
+    - frames_total
+    - gt_frames
+    - gt_prevalence
+    - system_fps
+    - inference_ms_mean
+    - inference_ms_std
+    - inference_ms_p50
+    - inference_ms_p90
+    - inference_ms_p99
+    - inference_ms_max
+    - inference_fps_theoretical
+    - precision
+    - recall
+    - f1
+    - iou_mean
+    - raw_detect_rate
+    - ram_peak_mb
+
+latency:
+  percentile_method: "simple index (sort + position)"
+  include_min: false
+  fields: [mean, std, p50, p90, p99, max]
+
+ram:
+  method: "VmRSS via /proc/self/status"
+  sample_every_n_frames: 10
+  reported_as: "peak"
+
+naming:
+  forbidden: [pipeline_ms, pipeline_fps]
+  correct: [inference_ms, inference_fps_theoretical, system_fps]
+
+guardrails:
+  - "không sửa core/"
+  - "không dùng detector output làm GT"
+  - "raw_detect_rate chỉ trong per-frame CSV, không phải summary header chính"

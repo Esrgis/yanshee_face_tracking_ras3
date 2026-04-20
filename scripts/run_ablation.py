@@ -1,323 +1,270 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
 """
-scripts/run_ablation.py - Ablation study runner (Python 3.5 compatible)
+scripts/run_ablation.py -- Buoc 2: Danh gia Scheduler & Tracking Trade-off (Pareto Frontier)
 
 Chay:
-  python scripts/run_ablation.py --source 0 --duration 60
-  make ablation
-  make ablation SRC=data/videos/test.avi DURATION=90 CONFIGS=AB
-
-4 configs:
-  A - Static skip=1  (baseline nang)
-  B - Static skip=5  (baseline nhe)
-  C - Adaptive, velocity only
-  D - Adaptive, velocity + jitter  (proposed)
-
-Output: results/logs/ablation_*.csv
+  python scripts/run_ablation.py --videos data/videos --duration 60
 """
-
 from __future__ import print_function
 import cv2
 import csv
 import time
 import os
 import argparse
-import collections
-import numpy as np
+import math
 
-
-class TrackerKalmanFilter(object):
-    def __init__(self, process_noise=0.03, measurement_noise=0.1):
-        self.kf = cv2.KalmanFilter(4, 2)
-        self.kf.measurementMatrix   = np.array([[1,0,0,0],[0,1,0,0]], np.float32)
-        self.kf.transitionMatrix    = np.array([[1,0,1,0],[0,1,0,1],[0,0,1,0],[0,0,0,1]], np.float32)
-        self.kf.processNoiseCov     = np.eye(4, dtype=np.float32) * float(process_noise)
-        self.kf.measurementNoiseCov = np.eye(2, dtype=np.float32) * float(measurement_noise)
-
-    def init_state(self, x, y):
-        self.kf.statePre  = np.array([[np.float32(x)],[np.float32(y)],[0],[0]], np.float32)
-        self.kf.statePost = np.array([[np.float32(x)],[np.float32(y)],[0],[0]], np.float32)
-
-    def predict(self):
-        p = self.kf.predict()
-        return int(p[0,0]), int(p[1,0])
-
-    def update(self, x, y):
-        self.kf.correct(np.array([[np.float32(x)],[np.float32(y)]]))
-        s = self.kf.statePost
-        return int(s[0,0]), int(s[1,0])
-
-
-class PIDController(object):
-    def __init__(self, Kp=0.05, Ki=0.0, Kd=0.01,
-                 max_integral=50.0, deadzone=2.0, output_limit=15.0):
-        self.Kp=Kp; self.Ki=Ki; self.Kd=Kd
-        self.max_integral=max_integral
-        self.deadzone=deadzone
-        self.output_limit=output_limit
-        self.prev_error=0.0; self.integral=0.0
-
-    def update(self, error, dt):
-        if dt <= 0: return 0.0
-        if abs(error) < self.deadzone: error = 0.0
-        P = self.Kp * error
-        self.integral = max(-self.max_integral,
-                            min(self.max_integral, self.integral + error * dt))
-        D = self.Kd * (error - self.prev_error) / dt
-        self.prev_error = error
-        out = P + self.Ki * self.integral + D
-        return max(-self.output_limit, min(self.output_limit, out))
-
-
-class AdaptiveScheduler(object):
-    def __init__(self, enabled=True, base_skip=5, min_skip=1,
-                 max_skip=15, alpha=0.08, beta=0.05, window=5):
-        self.enabled   = enabled
-        self.base_skip = int(base_skip)
-        self.min_skip  = int(min_skip)
-        self.max_skip  = int(max_skip)
-        self.alpha     = float(alpha)
-        self.beta      = float(beta)
-        self._cx = collections.deque(maxlen=window)
-        self._cy = collections.deque(maxlen=window)
-        self.current_skip  = base_skip
-        self.last_velocity = 0.0
-        self.last_reason   = "init"
-
-    def compute(self, cx, cy, jitter, lost):
-        if not self.enabled:
-            self.current_skip = self.base_skip
-            self.last_reason  = "disabled"
-            return self.current_skip
-        if lost:
-            self.current_skip = self.min_skip
-            self.last_reason  = "lost"
-            self._upd(cx, cy)
-            return self.current_skip
-        vel   = self._vel(cx, cy)
-        self._upd(cx, cy)
-        skip  = int(round(self.base_skip / (1.0 + self.alpha*vel + self.beta*jitter)))
-        skip  = max(self.min_skip, min(self.max_skip, skip))
-        self.last_velocity = round(vel, 2)
-        self.last_reason   = "adaptive"
-        self.current_skip  = skip
-        return skip
-
-    def _vel(self, cx, cy):
-        if cx < 0 or len(self._cx) < 2: return 0.0
-        n  = len(self._cx)
-        dx = (cx - self._cx[0]) / n
-        dy = (cy - self._cy[0]) / n
-        return (dx*dx + dy*dy) ** 0.5
-
-    def _upd(self, cx, cy):
-        if cx >= 0:
-            self._cx.append(cx)
-            self._cy.append(cy)
-
-
-class VisionHaarKCF(object):
-    def __init__(self, cascade_path, skip=5, pad=0.20, iou_thr=0.5, max_jump=180):
-        self.cascade = cv2.CascadeClassifier(cascade_path)
-        if self.cascade.empty():
-            raise IOError("Cannot load cascade: " + cascade_path)
-        self.skip        = skip
-        self.pad         = pad
-        self.iou_thr     = iou_thr
-        self.max_jump    = max_jump
-        self.frame_cnt   = 0
-        self.tracker     = None
-        self.is_tracking = False
-        self.bbox        = None
-        self.last_center = None
-
-    def process(self, frame):
-        found = False; cx = cy = -1
-        self.frame_cnt += 1
-        if self.is_tracking and self.tracker:
-            try:
-                ok, box = self.tracker.update(frame)
-                if ok and box[2] > 0 and box[3] > 0:
-                    self.bbox = tuple(map(int, box)); found = True
-                else:
-                    self._rst()
-            except Exception:
-                self._rst()
-        if not self.is_tracking or not found or self.frame_cnt >= self.skip:
-            if self.frame_cnt >= self.skip: self.frame_cnt = 0
-            gray  = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
-            faces = self.cascade.detectMultiScale(
-                gray, 1.08, 5, minSize=(40,40), maxSize=(400,400))
-            if len(faces) > 0:
-                best = self._best(faces)
-                if best is not None:
-                    pad = self._pad(best, frame.shape)
-                    if not self.is_tracking or self.bbox is None or self._iou(self.bbox, pad) < self.iou_thr:
-                        self._init(frame, pad)
-                    if self.bbox is None: self.bbox = pad
-                    found = True
-            else:
-                if not self.is_tracking:
-                    found = False; self.bbox = None
-        if found and self.bbox:
-            x,y,w,h = self.bbox
-            cx = x + w//2; cy = y + h//2
-            self.last_center = (cx, cy)
-        else:
-            self.bbox = None
-        return found, self.bbox, cx, cy
-
-    def _pad(self, b, shape):
-        x,y,w,h = b; fh,fw = shape[:2]
-        px = int(w*self.pad); py = int(h*self.pad)
-        x2 = max(0, x-px); y2 = max(0, y-py)
-        return (x2, y2, min(fw-x2, w+2*px), min(fh-y2, h+2*py))
-
-    def _iou(self, a, b):
-        ax,ay,aw,ah = a; bx,by,bw,bh = b
-        ix = max(0, min(ax+aw,bx+bw)-max(ax,bx))
-        iy = max(0, min(ay+ah,by+bh)-max(ay,by))
-        i  = ix*iy; u = aw*ah+bw*bh-i
-        return i/u if u>0 else 0.0
-
-    def _best(self, faces):
-        if self.last_center is None:
-            return max(faces, key=lambda b: b[2]*b[3])
-        pcx,pcy = self.last_center
-        def sc(b):
-            x,y,w,h = b
-            d = ((x+w//2-pcx)**2+(y+h//2-pcy)**2)**0.5
-            return -1.0 if d>self.max_jump else (w*h)/(d+1.0)
-        cands = [f for f in faces if sc(f) > 0]
-        return max(cands, key=sc) if cands else None
-
-    def _init(self, frame, bbox):
-        x,y,w,h = bbox
-        if w<=0 or h<=0: return
-        try:
-            self.tracker = cv2.TrackerKCF_create()
-            if self.tracker.init(frame, (x,y,w,h)):
-                self.is_tracking = True; self.bbox = (x,y,w,h)
-            else:
-                self._rst()
-        except Exception:
-            self._rst()
-
-    def _rst(self):
-        self.tracker = None; self.is_tracking = False; self.bbox = None
-
-
-CONFIGS = [
-    {"name": "A_static_skip1",      "enabled": False, "base_skip": 1,
-     "alpha": 0.0,  "beta": 0.0},
-    {"name": "B_static_skip5",      "enabled": False, "base_skip": 5,
-     "alpha": 0.0,  "beta": 0.0},
-    {"name": "C_adaptive_vel_only", "enabled": True,  "base_skip": 5,
-     "alpha": 0.08, "beta": 0.0},
-    {"name": "D_adaptive_full",     "enabled": True,  "base_skip": 5,
-     "alpha": 0.08, "beta": 0.05},
-]
-
-CASCADE = "haarcascade_frontalface_default.xml"
-W, H    = 640, 480
+W, H = 640, 480
 LOG_DIR = "results/logs"
 
+# ------------------------------------------------------------------
+# 1. CORE INJECTION (STRICT GUARDRAIL: DO NOT MODIFY CORE FOLDER)
+# ------------------------------------------------------------------
+from core.vision_haarcascade import VisionHaarCascade
 
-def run_one(cfg, source, duration, cascade):
-    if not os.path.isdir(LOG_DIR):
-        os.makedirs(LOG_DIR)
-    out_csv = os.path.join(LOG_DIR, "ablation_{}.csv".format(cfg["name"]))
+class VisionHaarMOSSE(VisionHaarCascade):
+    """
+    Subclass tiêm MOSSE Tracker trực tiếp tại Runtime. 
+    Không làm thay đổi mã nguồn gốc của hệ thống.
+    """
+    def __init__(self, detection_skip=1):
+        super(VisionHaarMOSSE, self).__init__(detection_skip=detection_skip)
+        self.mosse_fallback = False
 
-    cap = cv2.VideoCapture(source)
-    cap.set(cv2.CAP_PROP_FRAME_WIDTH, W)
-    cap.set(cv2.CAP_PROP_FRAME_HEIGHT, H)
+    def _init_tracker(self, frame, bbox):
+        # Override hàm khởi tạo tracker của class cha
+        try:
+            self.tracker = cv2.TrackerMOSSE_create()
+            self.mosse_fallback = False
+        except AttributeError:
+            self.tracker = cv2.legacy.TrackerMOSSE_create()
+            self.mosse_fallback = True
+        
+        if bbox is not None:
+            self.tracker.init(frame, bbox)
+            self.is_tracking = True
+        else:
+            self.is_tracking = False
+
+# ------------------------------------------------------------------
+# 2. FILTER & SCHEDULER IMPLEMENTATION
+# ------------------------------------------------------------------
+class TrackerKalmanFilter:
+    def __init__(self, gain=0.8):
+        self.gain = gain
+        self.last_val = None
+
+    def update(self, current_val):
+        if self.last_val is None:
+            self.last_val = current_val
+            return current_val
+        filtered = self.gain * current_val + (1 - self.gain) * self.last_val
+        self.last_val = filtered
+        return filtered
+
+    def reset(self):
+        self.last_val = None
+
+class AdaptiveScheduler:
+    def __init__(self, config):
+        self.is_adaptive = config['adaptive']
+        self.base_skip   = config['base_skip']
+        self.alpha       = config['alpha']
+        self.beta        = config['beta']
+        self.current_skip = self.base_skip
+
+    def step(self, velocity, jitter):
+        if not self.is_adaptive:
+            return self.base_skip, "static"
+        
+        # Công thức: giảm skip khi vận tốc cao hoặc nhiễu lớn để giữ khung hình
+        reduction = (self.alpha * velocity) + (self.beta * jitter)
+        new_skip = int(round(self.base_skip - reduction))
+        
+        # Clamp giới hạn: [1, base_skip]
+        new_skip = max(1, min(self.base_skip, new_skip))
+        reason = "adaptive_reduced" if new_skip < self.base_skip else "base"
+        
+        self.current_skip = new_skip
+        return new_skip, reason
+
+# ------------------------------------------------------------------
+# 3. ABLATION CONFIGURATIONS (FROM SPEC)
+# ------------------------------------------------------------------
+CONFIGS = {
+    "A": {"name": "A_static_skip1", "adaptive": False, "base_skip": 1, "alpha": 0.0, "beta": 0.0, "tracker": "kcf"},
+    "B": {"name": "B_static_skip5", "adaptive": False, "base_skip": 5, "alpha": 0.0, "beta": 0.0, "tracker": "kcf"},
+    "C": {"name": "C_adaptive_vel_only", "adaptive": True, "base_skip": 5, "alpha": 0.08, "beta": 0.0, "tracker": "kcf"},
+    "D": {"name": "D_adaptive_full", "adaptive": True, "base_skip": 5, "alpha": 0.08, "beta": 0.05, "tracker": "kcf"},
+    "E": {"name": "E_static_skip5_mosse", "adaptive": False, "base_skip": 5, "alpha": 0.0, "beta": 0.0, "tracker": "mosse"}
+}
+
+# ------------------------------------------------------------------
+# 4. MAIN ABLATION LOOP
+# ------------------------------------------------------------------
+def run_config(config_key, video_path, duration_seconds):
+    cfg = CONFIGS[config_key]
+    
+    if cfg['tracker'] == "mosse":
+        det = VisionHaarMOSSE(detection_skip=cfg['base_skip'])
+    else:
+        det = VisionHaarCascade(detection_skip=cfg['base_skip'])
+        
+    scheduler = AdaptiveScheduler(cfg)
+    filter_cx = TrackerKalmanFilter(gain=0.7)
+    
+    cap = cv2.VideoCapture(video_path)
+    cap.set(3, W)
+    cap.set(4, H)
     if not cap.isOpened():
-        print("[ERROR] Khong mo duoc: " + str(source)); return
+        print("[ERROR] Cannot open source:", video_path)
+        return None
 
-    vision = VisionHaarKCF(cascade, skip=cfg["base_skip"])
-    kalman = TrackerKalmanFilter()
-    pid    = PIDController()
-    sched  = AdaptiveScheduler(
-        enabled   = cfg["enabled"],
-        base_skip = cfg["base_skip"],
-        alpha     = cfg["alpha"],
-        beta      = cfg["beta"],
-    )
-    k_init = False; n = 0
-    t0 = prev = time.time()
+    out_csv = os.path.join(LOG_DIR, "per_frame_{}.csv".format(cfg['name']))
+    
+    # Initialization
+    rows = []
+    frame_idx = 0
+    start_time = time.time()
+    
+    frames_found = 0
+    tracking_lost_count = 0
+    tracker_reinit_count = 0
+    prev_found = False
+    
+    prev_cx = 0.0
+    velocity = 0.0
+    jitter = 0.0
+    sum_jitter = 0.0
+    sum_skip = 0
+    
+    while True:
+        elapsed = time.time() - start_time
+        if elapsed > duration_seconds:
+            break
+            
+        ret, frame = cap.read()
+        if not ret:
+            break
+            
+        frame_idx += 1
+        frame = cv2.resize(frame, (W, H))
+        
+        # 1. Update Scheduler (Đẩy tham số skip mới vào Detector)
+        current_skip, sched_reason = scheduler.step(velocity, jitter)
+        det.detection_skip = current_skip
+        
+        # 2. Pipeline Execution
+        t_inf = time.time()
+        found, bbox, cx_raw, cy_raw = det.process_frame(frame)
+        inf_ms = (time.time() - t_inf) * 1000.0
+        
+        # 3. System Metrics Evaluation
+        cx_filtered = cx_raw
+        if found:
+            frames_found += 1
+            cx_filtered = filter_cx.update(cx_raw)
+            jitter = abs(cx_raw - cx_filtered)
+            sum_jitter += jitter
+            velocity = abs(cx_filtered - prev_cx)
+            prev_cx = cx_filtered
+            
+            # Logic đếm Tracker Reinit: Trúng chu kỳ Detection VÀ có tìm thấy vật thể
+            if frame_idx % current_skip == 0:
+                tracker_reinit_count += 1
+        else:
+            jitter = 0.0
+            velocity = 0.0
+            filter_cx.reset()
 
-    with open(out_csv, "w", newline="") as f:
-        wr = csv.writer(f)
-        wr.writerow(["frame","found","cx_raw","cx_filtered","jitter",
-                     "error_px","pid_output","fps","vision_ms",
-                     "sched_skip","sched_velocity","sched_reason","config_name"])
-        print("[{}] running...".format(cfg["name"]))
+        # Logic đếm Tracking Lost
+        if prev_found and not found:
+            tracking_lost_count += 1
+        prev_found = found
 
-        while True:
-            now = time.time()
-            if duration and (now - t0) >= duration: break
-            dt   = now - prev; prev = now
-            ret, frame = cap.read()
-            if not ret:
-                if not isinstance(source, int):
-                    cap.set(cv2.CAP_PROP_POS_FRAMES, 0); continue
-                break
+        sum_skip += current_skip
+        current_fps = frame_idx / elapsed if elapsed > 0 else 0
 
-            frame = cv2.resize(frame, (W, H)); n += 1
-            tv = time.time()
-            found, bbox, cx_raw, cy_raw = vision.process(frame)
-            vis_ms = (time.time() - tv) * 1000
-
-            jit = 0.0; cx_f = cx_raw
-            if found and cx_raw >= 0:
-                if not k_init:
-                    kalman.init_state(cx_raw, cy_raw); k_init = True
-                else:
-                    cx_f, _ = kalman.update(cx_raw, cy_raw)
-                jit = abs(cx_raw - cx_f)
-            elif k_init:
-                cx_f, _ = kalman.predict()
-
-            sk         = sched.compute(cx_f, cy_raw, jit, not found)
-            vision.skip = sk
-            err        = float(cx_f - W//2) if found else 0.0
-            pid_out    = pid.update(err, dt if dt > 0 else 0.033)
-            fps        = 1.0/dt if dt > 0 else 0.0
-
-            wr.writerow([n, int(found), cx_raw, cx_f,
-                         round(jit,2), round(err,2), round(pid_out,3),
-                         round(fps,2), round(vis_ms,2),
-                         sk, sched.last_velocity,
-                         sched.last_reason, cfg["name"]])
-
-            if n % 30 == 0:
-                print("  f={:4d} fps={:5.1f} found={} skip={}".format(
-                    n, fps, found, sk))
+        # Pseudo-PID error_px logic cho report
+        error_px = (W/2) - cx_filtered if found else 0.0
+        pid_output = error_px * 0.1 # Mock Kp
+        
+        # Lấy trạng thái mosse_fallback động tại runtime an toàn
+        current_mosse_fallback = getattr(det, 'mosse_fallback', False)
+        
+        rows.append([
+            frame_idx, int(found), round(cx_raw, 1), round(cx_filtered, 1), 
+            round(jitter, 2), round(error_px, 1), round(pid_output, 2), 
+            round(current_fps, 1), round(inf_ms, 2), current_skip, 
+            round(velocity, 2), sched_reason, cfg['tracker'], int(current_mosse_fallback), cfg['name']
+        ])
 
     cap.release()
-    print("  -> " + out_csv)
+    
+    if not os.path.isdir(LOG_DIR): os.makedirs(LOG_DIR)
+    with open(out_csv, "w", newline="") as f:
+        wr = csv.writer(f)
+        wr.writerow(["frame", "found", "cx_raw", "cx_filtered", "jitter", "error_px", 
+                     "pid_output", "fps", "inference_ms", "sched_skip", "sched_velocity", 
+                     "sched_reason", "tracker_type", "mosse_fallback", "config_name"])
+        wr.writerows(rows)
 
+    n = frame_idx if frame_idx > 0 else 1
+    fps_avg = n / elapsed if elapsed > 0 else 0
+    tracking_rate = (frames_found / n) * 100.0
+    jitter_mean = sum_jitter / frames_found if frames_found > 0 else 0.0
+    sched_skip_mean = sum_skip / n
+
+    summary = {
+        "config_name": cfg['name'],
+        "tracker_type": cfg['tracker'],
+        "tracking_rate": round(tracking_rate, 2),
+        "fps_avg": round(fps_avg, 2),
+        "jitter_mean": round(jitter_mean, 2),
+        "tracking_lost_count": tracking_lost_count,
+        "tracker_reinit_count": tracker_reinit_count,
+        "sched_skip_mean": round(sched_skip_mean, 2)
+    }
+    
+    print("  -> [{}] TrRate: {:.1f}% | FPS: {:.1f} | Jitter: {:.2f} | Lost: {} | Reinit: {} | SkipMean: {:.1f}".format(
+        cfg['name'], tracking_rate, fps_avg, jitter_mean, tracking_lost_count, tracker_reinit_count, sched_skip_mean))
+        
+    return summary
 
 def main():
     ap = argparse.ArgumentParser()
-    ap.add_argument("--source",   default="0")
-    ap.add_argument("--duration", type=float, default=60.0)
-    ap.add_argument("--cascade",  default=CASCADE)
-    ap.add_argument("--configs",  default="ABCD")
+    ap.add_argument("--videos", default="data/videos")
+    ap.add_argument("--clip", default="fast", help="Video clip to run ablation on")
+    ap.add_argument("--duration", type=int, default=60, help="Run duration per config")
     args = ap.parse_args()
 
-    src = int(args.source) if args.source.isdigit() else args.source
-    mp  = {"A":0,"B":1,"C":2,"D":3}
-    sel = [CONFIGS[mp[c]] for c in args.configs.upper() if c in mp]
+    v_path = os.path.join(args.videos, "{}.avi".format(args.clip))
+    if not os.path.exists(v_path):
+        # Fallback qua webcam nếu không có video (phục vụ test robot thực)
+        v_path = 0 
+        print("[WARN] Clip not found. Falling back to Webcam 0.")
 
-    print("="*50)
-    print(" ABLATION: {} config(s), {}s each".format(len(sel), args.duration))
-    print("="*50)
-    for cfg in sel:
-        run_one(cfg, src, args.duration, args.cascade)
-    print("\nDone. Tiep theo: make analyze")
+    print("="*70)
+    print(" ABLATION STUDY: ADAPTIVE SCHEDULER & PARETO ANALYSIS")
+    print(" Target: {} | Duration: {}s".format("Webcam" if v_path == 0 else args.clip, args.duration))
+    print("="*70)
 
+    summaries = []
+    for key in sorted(CONFIGS.keys()):
+        s = run_config(key, v_path, args.duration)
+        if s:
+            summaries.append(s)
+
+    if summaries:
+        summary_path = os.path.join(LOG_DIR, "ablation_summary.csv")
+        keys = ["config_name", "tracker_type", "tracking_rate", "fps_avg", 
+                "jitter_mean", "tracking_lost_count", "tracker_reinit_count", "sched_skip_mean"]
+        with open(summary_path, "w", newline="") as f:
+            wr = csv.DictWriter(f, fieldnames=keys)
+            wr.writeheader()
+            wr.writerows(summaries)
+        print("\n[DONE] Summary -> {}".format(summary_path))
+        print("Sẵn sàng dữ liệu cho Jupyter Notebook vẽ Pareto frontier!")
 
 if __name__ == "__main__":
     main()

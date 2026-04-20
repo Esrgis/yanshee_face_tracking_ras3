@@ -1,0 +1,142 @@
+version: "1.0"
+last_updated_by: "Architect Dude"
+
+input:
+  source: "webcam (0) hoặc video path"
+  duration_seconds: 60
+  resolution: [640, 480]
+  cap_set:
+    width: 3
+    height: 4
+
+configs:
+  A:
+    name: "A_static_skip1"
+    adaptive: false
+    base_skip: 1
+    alpha: 0.0
+    beta: 0.0
+    tracker: "kcf"
+  B:
+    name: "B_static_skip5"
+    adaptive: false
+    base_skip: 5
+    alpha: 0.0
+    beta: 0.0
+    tracker: "kcf"
+  C:
+    name: "C_adaptive_vel_only"
+    adaptive: true
+    base_skip: 5
+    alpha: 0.08
+    beta: 0.0
+    tracker: "kcf"
+  D:
+    name: "D_adaptive_full"
+    adaptive: true
+    base_skip: 5
+    alpha: 0.08
+    beta: 0.05
+    tracker: "kcf"
+  E:
+    name: "E_static_skip5_mosse"
+    adaptive: false
+    base_skip: 5
+    alpha: 0.0
+    beta: 0.0
+    tracker: "mosse"
+
+scheduler_fsm_override:
+  states_forced_min_skip: ["SEARCH", "LOST", "SATURATED"]
+  saturated_justification: "When servo reaches max limits (SATURATED), FSM overrides adaptive logic to force minimum skip for rapid relocalization."
+
+jitter:
+  definition: "abs(cx_raw - cx_filtered)"
+
+scheduler_objective: >
+  Maximize tracking_rate while keeping system_fps >= 15 on Pi 3.
+  alpha justification: high velocity → detect sooner → reduce skip.
+  beta justification: high jitter → tracker unstable → re-anchor sooner.
+
+metrics:
+  primary: "tracking_rate"
+  secondary: "fps_avg"
+  tertiary: "jitter_mean"
+  hierarchy_note: >
+    tracking_rate must meet threshold first,
+    then fps_avg, then jitter_mean.
+
+  per_frame_csv:
+    - frame
+    - found
+    - cx_raw
+    - cx_filtered
+    - jitter
+    - error_px
+    - pid_output
+    - fps
+    - inference_ms
+    - sched_skip
+    - sched_velocity
+    - sched_reason
+    - tracker_type
+    - mosse_fallback
+    - config_name
+
+  summary_csv:
+    - config_name
+    - tracker_type
+    - tracking_rate
+    - fps_avg
+    - jitter_mean
+    - tracking_lost_count
+    - scheduled_detection_successes
+    - sched_skip_mean
+
+
+
+tracker:
+  kcf:
+    create: "cv2.TrackerKCF_create()"
+    weights_required: false
+  mosse:
+    create_primary: "cv2.TrackerMOSSE_create()"
+    create_fallback: "cv2.legacy.TrackerMOSSE_create()"
+    fallback_flag: "mosse_fallback = True"
+    weights_required: false
+
+architecture:
+  mosse_implementation: >
+    VisionHaarMOSSE kế thừa VisionHaarCascade,
+    chỉ override _init_tracker.
+    Định nghĩa trong scripts/run_ablation.py, không trong core/.
+
+report_figures:
+  fig1:
+    type: "scatter"
+    x: "fps_avg"
+    y: "tracking_rate"
+    points: [A, B, C, D, E]
+    purpose: "show Pareto frontier of adaptive scheduler"
+  fig2:
+    type: "bar"
+    x: "config"
+    y: "jitter_mean"
+  fig3:
+    type: "line"
+    x: "frame"
+    y: "cx_filtered"
+    overlay: [A, D, E]
+    purpose: "visualize stability"
+  fig4:
+    type: "bar"
+    x: "config"
+    y: "sched_skip_mean"
+    note: "only C and D have meaningful values"
+
+guardrails:
+  - "không sửa core/"
+  - "không thêm tracker_type vào config.json"
+  - "không if/else chọn tracker trong core/"
+  - "không thêm weights/model cho tracker"
+  - "VisionHaarMOSSE chỉ tồn tại trong scripts/run_ablation.py"

@@ -7,11 +7,11 @@
 "vision_benchmark": {
     "active_model": "haarcascade", 
     "models": {
-      "haarcascade": "haarcascade_frontalface_default.xml",
-      "lbp": "lbpcascade_frontalface_improved.xml",
+      "haarcascade": "models/haarcascade_frontalface_default.xml",
+      "lbp": "models/lbpcascade_frontalface_improved.xml",
       "ssd": {
-        "prototxt": "opencv_face_detector.pbtxt",
-        "weights": "opencv_face_detector_uint8.pb"
+        "prototxt": "models/opencv_face_detector.pbtxt",
+        "weights": "models/opencv_face_detector_uint8.pb"
       }
     },
     "frame_width": 320,
