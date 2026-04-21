@@ -6,7 +6,7 @@
     "log_csv": true
   },
   "hardware": {
-    "robot_ip": "192.168.0.1",
+    "robot_ip": "192.168.31.235",
     "use_multithreading": true
   },
   "vision": {
