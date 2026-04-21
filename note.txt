@@ -1,0 +1,9 @@
+generate_pseudo_labels.py:
+  [ ] Thêm None cho frame YOLO miss
+      annotations[str(frame_idx)] = None  (thay vì skip)
+
+run_benchmark.py:
+  [ ] Xử lý gt_box = None → fn += 1
+      if str(frame_idx) in gt_data["frames"]:
+          if gt_box is None: fn += 1
+          else: tính IoU bình thường
