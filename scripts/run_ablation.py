@@ -13,8 +13,9 @@ import time
 import os
 import argparse
 import math
+from core.filters import TrackerKalmanFilter
 
-W, H = 640, 480
+W, H = 320, 240
 LOG_DIR = "results/logs"
 
 # ------------------------------------------------------------------
@@ -77,14 +78,10 @@ class AdaptiveScheduler:
         if not self.is_adaptive:
             return self.base_skip, "static"
         
-        # Công thức: giảm skip khi vận tốc cao hoặc nhiễu lớn để giữ khung hình
-        reduction = (self.alpha * velocity) + (self.beta * jitter)
-        new_skip = int(round(self.base_skip - reduction))
-        
-        # Clamp giới hạn: [1, base_skip]
+        denominator = 1.0 + self.alpha * velocity + self.beta * jitter
+        new_skip = int(round(self.base_skip / denominator))
         new_skip = max(1, min(self.base_skip, new_skip))
-        reason = "adaptive_reduced" if new_skip < self.base_skip else "base"
-        
+        reason = "adaptive" if new_skip < self.base_skip else "base"
         self.current_skip = new_skip
         return new_skip, reason
 

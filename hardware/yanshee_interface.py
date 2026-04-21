@@ -7,30 +7,55 @@ except ImportError:
 
 try:
     import YanAPI
-except ImportError as e:
-    print("[WARNING] Không tìm thấy YanAPI. Bắt buộc chạy ở chế độ simulation.")
+except ImportError:
+    print("[WARNING] YanAPI not found. Forced simulation mode.")
 
 class YansheeInterface:
     def __init__(self, config_dict, is_simulation=True):
         self.is_simulation = is_simulation
         self.use_thread = config_dict.get("use_multithreading", True)
-        
-        # --- CẬP NHẬT THÔNG SỐ TỪ YANAPI DOCS ---
-        self.servo_name = "NeckLR" 
-        self.center_angle = 90.0  # Góc nhìn thẳng
-        self.min_abs_angle = 15.0 # Giới hạn quay trái
-        self.max_abs_angle = 165.0 # Giới hạn quay phải
-        
+        if self.is_simulation:
+            self.use_thread = False  # Luôn tắt threading trong simulation để dễ debug
+        self.servo_name = "NeckLR"
+        self.center_angle = 90.0
+        self.min_abs_angle = 15.0
+        self.max_abs_angle = 165.0
         self.current_angle = self.center_angle
-        
+
+        if not self.is_simulation:
+            ip = config_dict.get("robot_ip", "127.0.0.1")
+            try:
+                YanAPI.yan_api_init(ip)
+                print("[HARDWARE] YanAPI init OK | ip={}".format(ip))
+            except Exception as e:
+                print("[ERROR] YanAPI init failed: {}".format(e))
+
         if self.use_thread:
-            self.angle_queue = queue.Queue(maxsize=1) 
+            self.angle_queue = queue.Queue(maxsize=1)
             self.thread = threading.Thread(target=self._servo_worker)
             self.thread.daemon = True
             self.thread.start()
-            print("[HARDWARE] Started in MULTI-THREAD mode")
+            print("[HARDWARE] Started | mode={} | threading=ON".format(
+                "SIM" if is_simulation else "REAL"))
         else:
-            print("[HARDWARE] Started in SINGLE-THREAD mode")
+            print("[HARDWARE] Started | mode={} | threading=OFF".format(
+                "SIM" if is_simulation else "REAL"))
+
+    def _send_to_hardware(self, angle):
+        self.current_angle = angle
+        final_angle_int = int(round(angle))
+
+        if self.is_simulation:
+            print("[SIM] NeckLR -> {}deg | abs={}deg".format(
+                final_angle_int, final_angle_int))
+        else:
+            try:
+                YanAPI.set_servos_angles({self.servo_name: final_angle_int}, 200)
+            except Exception as e:
+                print("[ERROR] YanAPI failed: {}".format(e))
+
+    def get_current_angle(self):
+        return self.current_angle
 
     def set_head_angle(self, target_pid_angle):
         """
@@ -59,17 +84,15 @@ class YansheeInterface:
             self.angle_queue.task_done()
 
     def _send_to_hardware(self, angle):
+        prev = self.current_angle
         self.current_angle = angle
-        
-        # YanAPI yêu cầu góc phải là số nguyên (int)
-        final_angle_int = int(angle)
-        
+        final_angle_int = int(round(angle))
+
         if self.is_simulation:
-            # print(f"[SIMULATION] Xoay cổ (NeckLR) tới: {final_angle_int} độ")
-            pass
+            if abs(angle - prev) >= 0.5:  # chỉ print khi thay đổi >= 0.5 độ
+                print("[SIM] NeckLR -> {}deg".format(final_angle_int))
         else:
             try:
-                # Gửi cấu trúc Dict chuẩn của YanAPI với runtime thấp nhất là 200ms
                 YanAPI.set_servos_angles({self.servo_name: final_angle_int}, 200)
             except Exception as e:
                 print("[ERROR] YanAPI failed: {}".format(e))

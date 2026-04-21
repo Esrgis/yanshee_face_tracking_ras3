@@ -1,11 +1,16 @@
 {
- "system": {
+
+  "system": {
     "use_kalman": true,
     "display_ui": true,
     "log_csv": true
   },
-"vision_benchmark": {
-    "active_model": "haarcascade", 
+  "hardware": {
+    "robot_ip": "192.168.0.1",
+    "use_multithreading": true
+  },
+  "vision": {
+    "active_model": "haarcascade",
     "models": {
       "haarcascade": "models/haarcascade_frontalface_default.xml",
       "lbp": "models/lbpcascade_frontalface_improved.xml",
@@ -16,14 +21,14 @@
     },
     "frame_width": 320,
     "frame_height": 240,
-    "pad_ratio": 0.25, 
-    "iou_reinit_threshold": 0.4
+    "pad_ratio": 0.20,
+    "iou_reinit_threshold": 0.5
   },
-  "scheduler_ablation": {
+  "adaptive_scheduler": {
     "active_config": "D",
     "configs": {
-      "A": {"base_skip": 1, "alpha": 0.0, "beta": 0.0},
-      "B": {"base_skip": 5, "alpha": 0.0, "beta": 0.0},
+      "A": {"base_skip": 1, "alpha": 0.0,  "beta": 0.0},
+      "B": {"base_skip": 5, "alpha": 0.0,  "beta": 0.0},
       "C": {"base_skip": 5, "alpha": 0.08, "beta": 0.0},
       "D": {"base_skip": 5, "alpha": 0.08, "beta": 0.05}
     },
@@ -32,12 +37,11 @@
     "velocity_window": 5
   },
   "robot_yanshee": {
-    "use_multithreading": true,
-    "max_angle": 45,
-    "min_angle": -45,
+    "servo_min_abs": 15,
+    "servo_max_abs": 165,
+    "servo_center": 90,
     "timeout_lost": 3.0,
     "lost_frame_threshold": 5,
-    "default_angle": 0,
     "backoff_delta": 5
   },
   "controller_pid": {
@@ -54,13 +58,5 @@
   },
   "testing_env": {
     "webcam_index": 0
-  },
-  "camera": {
-    "cascade_path": "haarcascade_frontalface_default.xml",
-    "frame_width": 320,
-    "frame_height": 240,
-    "detection_skip_frames": 5,
-    "pad_ratio": 0.25, 
-    "iou_reinit_threshold": 0.4
   }
 }
