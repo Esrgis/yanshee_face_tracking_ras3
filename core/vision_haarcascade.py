@@ -18,8 +18,9 @@ from core.vision import VisionSystem
 class VisionHaarCascade(VisionSystem):
 
     def __init__(self, cascade_path=None, conf_threshold=0.5,
-                 detection_skip=5, pad_ratio=0.20, iou_reinit_threshold=0.5,
-                 max_jump_px=180):
+             detection_skip=5, pad_ratio=0.20, iou_reinit_threshold=0.5,
+             max_jump_px=180, min_size=30, max_size=400,
+             min_neighbors=5, scale_factor=1.08):
         """
         Parameters
         ----------
@@ -53,6 +54,10 @@ class VisionHaarCascade(VisionSystem):
         self.pad_ratio            = float(pad_ratio)
         self.iou_reinit_threshold = float(iou_reinit_threshold)
         self.max_jump_px          = int(max_jump_px)
+        self.min_size      = (int(min_size), int(min_size))
+        self.max_size      = (int(max_size), int(max_size))
+        self.min_neighbors = int(min_neighbors)
+        self.scale_factor  = float(scale_factor)
 
         self.frame_counter = 0
         self.tracker       = None
@@ -60,8 +65,9 @@ class VisionHaarCascade(VisionSystem):
         self.bbox          = None                 # bbox hiện tại (đã padded)
         self.last_center   = None                 # (cx, cy) frame trước
 
-        print("[Haar-KCF] Init OK | skip={} | pad={:.0%} | iou_thr={}".format(
-            self.detection_skip, self.pad_ratio, self.iou_reinit_threshold))
+        print("[Haar-KCF] Init OK | skip={} | pad={:.0%} | iou_thr={} | minN={} | minSz={}".format(
+        self.detection_skip, self.pad_ratio, self.iou_reinit_threshold,
+        self.min_neighbors, self.min_size))
 
     # ------------------------------------------------------------------
     # Public API (giữ nguyên interface với phần còn lại của pipeline)
@@ -98,8 +104,11 @@ class VisionHaarCascade(VisionSystem):
 
             gray  = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
             faces = self.cascade.detectMultiScale(
-                gray, scaleFactor=1.08, minNeighbors=5,
-                minSize=(40, 40), maxSize=(400, 400)
+                gray,
+                scaleFactor  = self.scale_factor,
+                minNeighbors = self.min_neighbors,
+                minSize      = self.min_size,
+                maxSize      = self.max_size,
             )
 
             if len(faces) > 0:

@@ -52,7 +52,7 @@ def main():
                     is_recording = True
                     frame_count  = 0
                     out_path = "data/videos/{}.avi".format(clip_name)
-                    fourcc   = cv2.VideoWriter_fourcc(*'MJPG')
+                        
                     writer   = cv2.VideoWriter(out_path, fourcc, FPS, (W_STREAM, H_STREAM))
                     print("[SERVER] >>> ACTION! {} -> {}".format(clip_name, out_path))
 

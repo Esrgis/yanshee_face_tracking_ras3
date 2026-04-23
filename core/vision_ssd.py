@@ -20,16 +20,17 @@ from core.vision import VisionSystem
 class VisionSSD(VisionSystem):
 
     def __init__(self, prototxt_path=None, model_path=None,
-                 conf_threshold=0.5, detection_skip=5,
-                 pad_ratio=0.20, iou_reinit_threshold=0.5,
-                 max_jump_px=180):
+             conf_threshold=0.5, detection_skip=5,
+             pad_ratio=0.20, iou_reinit_threshold=0.5,
+             max_jump_px=180, min_size=30, max_size=400,
+             min_neighbors=5, scale_factor=1.0):
 
         base_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
         if prototxt_path is None:
-            prototxt_path = os.path.join(base_dir, "opencv_face_detector.pbtxt")
+            prototxt_path = os.path.join(base_dir, "models", "opencv_face_detector.pbtxt")
         if model_path is None:
-            model_path = os.path.join(base_dir, "opencv_face_detector_uint8.pb")
+            model_path = os.path.join(base_dir, "models", "opencv_face_detector_uint8.pb")
 
         if not os.path.exists(prototxt_path) or not os.path.exists(model_path):
             raise Exception(

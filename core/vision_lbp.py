@@ -17,8 +17,9 @@ from core.vision import VisionSystem
 class VisionLBP(VisionSystem):
 
     def __init__(self, cascade_path=None, conf_threshold=0.5,
-                 detection_skip=5, pad_ratio=0.20, iou_reinit_threshold=0.5,
-                 max_jump_px=180):
+             detection_skip=5, pad_ratio=0.20, iou_reinit_threshold=0.5,
+             max_jump_px=180, min_size=30, max_size=400,
+             min_neighbors=5, scale_factor=1.05):
         """
         Parameters
         ----------
@@ -35,7 +36,7 @@ class VisionLBP(VisionSystem):
         if cascade_path is None:
             # Tim trong thu muc goc repo (canh file main)
             base_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-            default_path = os.path.join(base_dir, "lbpcascade_frontalface_improved.xml")
+            default_path = os.path.join(base_dir, "models", "lbpcascade_frontalface_improved.xml")
             if os.path.exists(default_path):
                 cascade_path = default_path
             else:
@@ -54,15 +55,19 @@ class VisionLBP(VisionSystem):
         self.pad_ratio            = float(pad_ratio)
         self.iou_reinit_threshold = float(iou_reinit_threshold)
         self.max_jump_px          = int(max_jump_px)
-
+        self.min_size      = (int(min_size), int(min_size))
+        self.max_size      = (int(max_size), int(max_size))
+        self.min_neighbors = int(min_neighbors)
+        self.scale_factor  = float(scale_factor)
         self.frame_counter = 0
         self.tracker       = None
         self.is_tracking   = False
         self.bbox          = None
         self.last_center   = None
 
-        print("[LBP-KCF] Init OK | skip={} | pad={:.0%} | iou_thr={}".format(
-            self.detection_skip, self.pad_ratio, self.iou_reinit_threshold))
+        print("[LBP-KCF] Init OK | skip={} | pad={:.0%} | iou_thr={} | minN={} | minSz={}".format(
+        self.detection_skip, self.pad_ratio, self.iou_reinit_threshold,
+        self.min_neighbors, self.min_size))
 
     # ------------------------------------------------------------------
     # Public API -- giu nguyen interface voi phan con lai cua pipeline
@@ -102,8 +107,11 @@ class VisionLBP(VisionSystem):
             # LBP dung scaleFactor nho hon Haar (1.05 thay 1.08)
             # vi LBP it sensitive hon voi scale -- can nhieu buoc hon
             faces = self.cascade.detectMultiScale(
-                gray, scaleFactor=1.05, minNeighbors=3,
-                minSize=(40, 40), maxSize=(400, 400)
+                gray,
+                scaleFactor  = self.scale_factor,
+                minNeighbors = self.min_neighbors,
+                minSize      = self.min_size,
+                maxSize      = self.max_size,
             )
 
             if len(faces) > 0:
