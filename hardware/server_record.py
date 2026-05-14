@@ -34,6 +34,7 @@ def main():
     is_recording = False
     writer       = None
     frame_count  = 0
+    fourcc       = cv2.VideoWriter_fourcc(*'XVID')
 
     if not os.path.isdir("data/videos"):
         os.makedirs("data/videos")

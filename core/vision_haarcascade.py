@@ -3,10 +3,10 @@
 """
 vision_haarcascade.py  —  Fixed version
 Thay đổi so với bản gốc:
-  1. _add_padding()       : thêm margin 20% quanh bbox trước khi init KCF
-                            → KCF không mất feature khi mặt xoay nhẹ
+  1. _add_padding()       : thêm margin 20% quanh bbox trước khi init MOSSE
+                            → MOSSE không mất feature khi mặt xoay nhẹ
   2. _iou()               : kiểm tra overlap giữa bbox cũ và bbox mới
-                            → không reinit KCF khi Haar trả bbox lệch nhỏ
+                            → không reinit MOSSE khi Haar trả bbox lệch nhỏ
   3. _select_best_face()  : chọn mặt gần vị trí trước nhất (không chỉ lớn nhất)
                             → tránh nhảy sang track quạt / vật thể nền
 """
@@ -25,16 +25,16 @@ class VisionHaarCascade(VisionSystem):
         Parameters
         ----------
         pad_ratio : float
-            Tỉ lệ padding thêm vào bbox Haar trước khi init KCF.
-            0.20 = thêm 20% mỗi phía. Giúp KCF bao trọn mặt khi xoay.
+            Tỉ lệ padding thêm vào bbox Haar trước khi init MOSSE.
+            0.20 = thêm 20% mỗi phía. Giúp MOSSE bao trọn mặt khi xoay.
         iou_reinit_threshold : float
-            Chỉ reinit KCF khi IoU(bbox_cũ, bbox_mới) < threshold này.
-            Tránh bbox nhảy khi Haar và KCF nhất quán.
+            Chỉ reinit MOSSE khi IoU(bbox_cũ, bbox_mới) < threshold này.
+            Tránh bbox nhảy khi Haar và MOSSE nhất quán.
         max_jump_px : int
             Loại bỏ detection candidate nếu tâm cách vị trí trước > giá trị này.
             Hàng rào chặn quạt / vật thể ngẫu nhiên pass Haar.
         """
-        # --- Tìm cascade path ---
+        # ... (giữ nguyên phần init cascade) ...
         if cascade_path is None:
             if hasattr(cv2, 'data') and hasattr(cv2.data, 'haarcascades'):
                 cascade_path = cv2.data.haarcascades + 'haarcascade_frontalface_default.xml'
@@ -65,7 +65,7 @@ class VisionHaarCascade(VisionSystem):
         self.bbox          = None                 # bbox hiện tại (đã padded)
         self.last_center   = None                 # (cx, cy) frame trước
 
-        print("[Haar-KCF] Init OK | skip={} | pad={:.0%} | iou_thr={} | minN={} | minSz={}".format(
+        print("[Haar-MOSSE] Init OK | skip={} | pad={:.0%} | iou_thr={} | minN={} | minSz={}".format(
         self.detection_skip, self.pad_ratio, self.iou_reinit_threshold,
         self.min_neighbors, self.min_size))
 
@@ -76,13 +76,13 @@ class VisionHaarCascade(VisionSystem):
     def process_frame(self, frame, prev_x=-1, prev_y=-1):
         """
         Returns: (target_found, bbox, center_x, center_y)
-        bbox = (x, y, w, h) — có padding, dùng để vẽ và init KCF
+        bbox = (x, y, w, h) — có padding, dùng để vẽ và init MOSSE
         """
         target_found = False
         center_x = center_y = -1
         self.frame_counter += 1
 
-        # --- 1. Cập nhật KCF tracker ---
+        # --- 1. Cập nhật MOSSE tracker ---
         if self.is_tracking and self.tracker is not None:
             try:
                 ok, box = self.tracker.update(frame)
@@ -116,10 +116,10 @@ class VisionHaarCascade(VisionSystem):
                 best_raw = self._select_best_face(faces)
 
                 if best_raw is not None:
-                    # FIX 1: thêm padding trước khi init KCF
+                    # FIX 1: thêm padding trước khi init MOSSE
                     best_padded = self._add_padding(best_raw, frame.shape)
 
-                    # FIX 2: chỉ reinit KCF khi bbox thay đổi đáng kể
+                    # FIX 2: chỉ reinit MOSSE khi bbox thay đổi đáng kể
                     should_reinit = (
                         not self.is_tracking
                         or self.bbox is None
@@ -206,7 +206,8 @@ class VisionHaarCascade(VisionSystem):
         if w <= 0 or h <= 0:
             return False
         try:
-            self.tracker = cv2.TrackerKCF_create()
+            # Chuyển sang MOSSE để nhanh hơn trên Pi 3
+            self.tracker = cv2.TrackerMOSSE_create()
             ok = self.tracker.init(frame, (x, y, w, h))
             if ok:
                 self.is_tracking = True
@@ -216,7 +217,7 @@ class VisionHaarCascade(VisionSystem):
                 self._reset_tracker()
                 return False
         except Exception as e:
-            print("[KCF] Init error:", e)
+            print("[MOSSE] Init error:", e)
             self._reset_tracker()
             return False
 

@@ -65,7 +65,7 @@ class VisionLBP(VisionSystem):
         self.bbox          = None
         self.last_center   = None
 
-        print("[LBP-KCF] Init OK | skip={} | pad={:.0%} | iou_thr={} | minN={} | minSz={}".format(
+        print("[LBP-MOSSE] Init OK | skip={} | pad={:.0%} | iou_thr={} | minN={} | minSz={}".format(
         self.detection_skip, self.pad_ratio, self.iou_reinit_threshold,
         self.min_neighbors, self.min_size))
 
@@ -196,7 +196,8 @@ class VisionLBP(VisionSystem):
         if w <= 0 or h <= 0:
             return False
         try:
-            self.tracker = cv2.TrackerKCF_create()
+            # Chuyển sang MOSSE để nhanh hơn trên Pi 3
+            self.tracker = cv2.TrackerMOSSE_create()
             ok = self.tracker.init(frame, (x, y, w, h))
             if ok:
                 self.is_tracking = True
@@ -206,7 +207,7 @@ class VisionLBP(VisionSystem):
                 self._reset_tracker()
                 return False
         except Exception as e:
-            print("[KCF] Init error:", e)
+            print("[MOSSE] Init error:", e)
             self._reset_tracker()
             return False
 

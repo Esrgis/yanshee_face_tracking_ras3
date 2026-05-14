@@ -1,15 +1,28 @@
 {
   "system": {
     "use_kalman": true,
-    "display_ui": true,
+    "display_ui": false,
     "log_csv": true
   },
   "hardware": {
-    "robot_ip": "192.168.31.235",
-    "use_multithreading": true
+    "robot_ip": "192.168.31.239",
+    "use_multithreading": true,
+    "servo_direction": -1,
+    "min_command_interval_sec": 0.08,
+    "servo_duration_ms": 80
+  },
+  "stream_monitor": {
+    "enabled": false,
+    "host": "0.0.0.0",
+    "port": 5555,
+    "fps": 10,
+    "jpeg_quality": 45,
+    "record_dir": "data/videos",
+    "record_fps": 20,
+    "max_record_sec": 30
   },
   "vision": {
-    "active_model": "haarcascade",
+    "active_model": "lbp",
     "models": {
       "haarcascade": "models/haarcascade_frontalface_default.xml",
       "lbp": "models/lbpcascade_frontalface_improved.xml",

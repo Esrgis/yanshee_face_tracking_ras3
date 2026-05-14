@@ -21,6 +21,11 @@ class YansheeInterface:
         self.min_abs_angle = 15.0
         self.max_abs_angle = 165.0
         self.current_angle = self.center_angle
+        self.target_angle = self.center_angle
+        self.servo_direction = float(config_dict.get("servo_direction", -1.0))
+        self.min_command_interval = float(config_dict.get("min_command_interval_sec", 0.08))
+        self.servo_duration_ms = int(config_dict.get("servo_duration_ms", 80))
+        self.last_command_time = 0.0
 
         if not self.is_simulation:
             ip = config_dict.get("robot_ip", "127.0.0.1")
@@ -42,33 +47,39 @@ class YansheeInterface:
                 "SIM" if is_simulation else "REAL"))
 
     def _send_to_hardware(self, angle):
+        prev = self.current_angle
         self.current_angle = angle
         final_angle_int = int(round(angle))
 
         if self.is_simulation:
-            print("[SIM] NeckLR -> {}deg | abs={}deg".format(
-                final_angle_int, final_angle_int))
+            if abs(angle - prev) >= 0.1:  # nhạy hơn một chút để debug
+                print("[SIM] NeckLR -> {}deg".format(final_angle_int))
         else:
             try:
-                YanAPI.set_servos_angles({self.servo_name: final_angle_int}, 200)
+                YanAPI.set_servos_angles({self.servo_name: final_angle_int}, self.servo_duration_ms)
             except Exception as e:
                 print("[ERROR] YanAPI failed: {}".format(e))
 
     def get_current_angle(self):
         return self.current_angle
 
-    def set_head_angle(self, target_pid_angle):
+    def set_head_angle(self, pid_correction):
         """
-        Nhận góc từ bộ PID (ví dụ: -30 đến +30 độ)
-        Biến đổi thành góc vật lý tuyệt đối (ví dụ: 60 đến 120 độ)
+        Nhận giá trị hiệu chỉnh từ PID.
+        Cập nhật góc hiện tại theo hướng incremental.
         """
-        # 1. Chuyển đổi góc tương đối thành góc tuyệt đối trên servo
-        absolute_angle = self.center_angle - target_pid_angle # Trừ hay cộng tùy chiều camera của bạn
+        now = time.time()
+        if now - self.last_command_time < self.min_command_interval:
+            return
+        self.last_command_time = now
+
+        new_angle = self.target_angle + self.servo_direction * pid_correction
         
         # 2. Kẹp (Clamp) góc vào giới hạn an toàn của YanAPI (15 - 165)
-        safe_angle = max(min(absolute_angle, self.max_abs_angle), self.min_abs_angle)
+        safe_angle = max(min(new_angle, self.max_abs_angle), self.min_abs_angle)
+        self.target_angle = safe_angle
         
-        # 3. Gửi xuống luồng
+        # 3. Gửi lệnh đi
         if self.use_thread:
             if self.angle_queue.full():
                 try: self.angle_queue.get_nowait()
@@ -76,23 +87,9 @@ class YansheeInterface:
             self.angle_queue.put(safe_angle)
         else:
             self._send_to_hardware(safe_angle)
-            
+
     def _servo_worker(self):
         while True:
             angle = self.angle_queue.get() 
             self._send_to_hardware(angle)
             self.angle_queue.task_done()
-
-    def _send_to_hardware(self, angle):
-        prev = self.current_angle
-        self.current_angle = angle
-        final_angle_int = int(round(angle))
-
-        if self.is_simulation:
-            if abs(angle - prev) >= 0.5:  # chỉ print khi thay đổi >= 0.5 độ
-                print("[SIM] NeckLR -> {}deg".format(final_angle_int))
-        else:
-            try:
-                YanAPI.set_servos_angles({self.servo_name: final_angle_int}, 200)
-            except Exception as e:
-                print("[ERROR] YanAPI failed: {}".format(e))

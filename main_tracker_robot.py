@@ -18,11 +18,16 @@ import sys
 import argparse
 
 from core.vision_haarcascade import VisionHaarCascade
+from core.vision_lbp        import VisionLBP
 from core.filters             import TrackerKalmanFilter
 from core.control             import PIDController
 from core.state_machine       import TrackingStateMachine, RobotState
 from core.adaptive_scheduler  import AdaptiveDetectionScheduler
 from hardware.yanshee_interface import YansheeInterface
+try:
+    from hardware.stream_server import FrameStreamServer
+except ImportError:
+    FrameStreamServer = None
 
 
 def load_config(path="config.json"):
@@ -39,6 +44,8 @@ def main():
     ap.add_argument("--real",   action="store_true", help="Chay robot that (mac dinh: sim)")
     ap.add_argument("--config", default=None,        help="Override scheduler config (A/B/C/D)")
     ap.add_argument("--ui",     action="store_true", help="Hien thi cua so OpenCV")
+    ap.add_argument("--stream", action="store_true", help="Gui frame qua client_monitor.py")
+    ap.add_argument("--stream-port", type=int, default=None, help="Port stream monitor")
     args = ap.parse_args()
 
     cfg         = load_config()
@@ -49,10 +56,12 @@ def main():
     hw_cfg      = cfg.get("hardware", {})
     sched_cfg   = cfg.get("adaptive_scheduler", {})
     sys_cfg     = cfg.get("system", {})
+    stream_cfg  = cfg.get("stream_monitor", {})
     env_cfg     = cfg.get("testing_env", {})
 
     is_sim      = not args.real
-    show_ui     = args.ui or sys_cfg.get("display_ui", False)
+    show_ui     = args.ui
+    enable_stream = args.stream or stream_cfg.get("enabled", False)
 
     W = vis_cfg.get("frame_width",  320)
     H = vis_cfg.get("frame_height", 240)
@@ -78,12 +87,23 @@ def main():
         sys.exit(1)
 
     # --- Init components ---
-    vision = VisionHaarCascade(
-        cascade_path         = vis_cfg.get("models", {}).get("haarcascade"),
-        detection_skip       = sel_cfg.get("base_skip", 5),
-        pad_ratio            = vis_cfg.get("pad_ratio", 0.20),
-        iou_reinit_threshold = vis_cfg.get("iou_reinit_threshold", 0.5),
-    )
+    active_model = vis_cfg.get("active_model", "haarcascade")
+    if active_model == "lbp":
+        print("[INFO] Using LBP Cascade (Faster on Pi 3)")
+        vision = VisionLBP(
+            cascade_path         = vis_cfg.get("models", {}).get("lbp"),
+            detection_skip       = sel_cfg.get("base_skip", 5),
+            pad_ratio            = vis_cfg.get("pad_ratio", 0.20),
+            iou_reinit_threshold = vis_cfg.get("iou_reinit_threshold", 0.5),
+        )
+    else:
+        print("[INFO] Using Haar Cascade")
+        vision = VisionHaarCascade(
+            cascade_path         = vis_cfg.get("models", {}).get("haarcascade"),
+            detection_skip       = sel_cfg.get("base_skip", 5),
+            pad_ratio            = vis_cfg.get("pad_ratio", 0.20),
+            iou_reinit_threshold = vis_cfg.get("iou_reinit_threshold", 0.5),
+        )
 
     kalman = TrackerKalmanFilter(
         process_noise      = kal_cfg.get("process_noise_cov", 0.03),
@@ -116,6 +136,20 @@ def main():
     )
 
     robot = YansheeInterface(hw_cfg, is_simulation=is_sim)
+    streamer = None
+    if enable_stream and FrameStreamServer is not None:
+        streamer = FrameStreamServer(
+            host         = stream_cfg.get("host", "0.0.0.0"),
+            port         = args.stream_port or stream_cfg.get("port", 5555),
+            fps          = stream_cfg.get("fps", 10),
+            jpeg_quality = stream_cfg.get("jpeg_quality", 45),
+            record_dir   = stream_cfg.get("record_dir", "data/videos"),
+            record_fps   = stream_cfg.get("record_fps", 20),
+            max_record_sec = stream_cfg.get("max_record_sec", 30),
+        )
+        streamer.start()
+    elif enable_stream:
+        print("[WARNING] stream_server not available; monitor disabled")
 
     servo_center  = rob_cfg.get("servo_center",  90.0)
     servo_min_abs = rob_cfg.get("servo_min_abs", 15.0)
@@ -164,45 +198,46 @@ def main():
                     cx_filtered, _ = kalman.predict()
                 jitter = 0.0
 
-            # 4. FSM
-            pid_output  = 0.0
-            neck_abs    = servo_center
-            state       = fsm.update(
+            # 4. FSM (Cập nhật trạng thái)
+            # Lưu ý: neck_abs ở đây chỉ để FSM biết robot đang ở đâu để tính SATURATED
+            neck_abs = robot.get_current_angle()
+            state    = fsm.update(
                 found,
-                servo_center - pid_output,
+                neck_abs,
                 servo_max_abs,
                 servo_min_abs,
             )
 
-            # 5. PID (chi khi TRACKING)
+            # 5. PID (chỉ khi TRACKING)
             error = 0.0
+            pid_output = 0.0
             if found and cx_filtered >= 0:
                 error      = float(cx_filtered - center_x)
+                # PID output lúc này là mức độ hiệu chỉnh (delta)
                 pid_output = pid.update(error, dt if dt > 0 else 0.033)
-                neck_abs   = servo_center - pid_output
-                neck_abs   = max(servo_min_abs, min(servo_max_abs, neck_abs))
             else:
                 pid.reset_memory()
 
-            # 6. Gửi lệnh robot
+            # 6. Gửi lệnh robot (Incremental)
             if state != RobotState.LOST:
                 robot.set_head_angle(pid_output)
 
             # 7. Terminal log
             fps = 1.0 / dt if dt > 0 else 0.0
+            actual_angle = robot.get_current_angle()
             if frame_count % 10 == 0:
-                print("[f={:04d}] {} | err={:+.1f}px | PID={:+.2f} | Neck={:.0f}deg | skip={} | fps={:.1f}".format(
+                print("[f={:04d}] {} | err={:+.1f}px | PID_delta={:+.2f} | Neck={:.0f}deg | skip={} | fps={:.1f}".format(
                     frame_count,
                     state.name,
                     error,
                     pid_output,
-                    neck_abs,
+                    actual_angle,
                     skip,
                     fps,
                 ))
 
-            # 8. UI (optional)
-            if show_ui:
+            # 8. UI / remote monitor (optional)
+            if show_ui or streamer is not None:
                 disp = frame.copy()
                 if found and bbox:
                     x, y, wb, hb = bbox
@@ -213,8 +248,11 @@ def main():
                     "{} | skip={} | fps={:.1f}".format(state.name, skip, fps),
                     (5, 20), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 255, 0), 1)
                 cv2.putText(disp,
-                    "err={:+.1f} PID={:+.2f} Neck={:.0f}".format(error, pid_output, neck_abs),
+                    "err={:+.1f} Delta={:+.2f} Neck={:.0f}".format(error, pid_output, actual_angle),
                     (5, 40), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 255, 0), 1)
+                if streamer is not None:
+                    streamer.update(disp)
+            if show_ui:
                 cv2.imshow("Yanshee Tracker", disp)
                 if cv2.waitKey(1) & 0xFF == ord("q"):
                     break
@@ -225,6 +263,8 @@ def main():
         cap.release()
         if show_ui:
             cv2.destroyAllWindows()
+        if streamer is not None:
+            streamer.stop()
         print("[INFO] Done. Neck last angle: {:.0f}deg".format(
             robot.get_current_angle()))
 
