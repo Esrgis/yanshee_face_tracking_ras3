@@ -26,13 +26,17 @@ class YansheeInterface:
         self.servo_direction = float(config_dict.get("servo_direction", -1.0))
         self.min_command_interval = float(config_dict.get("min_command_interval_sec", 0.08))
         self.servo_duration_ms = int(config_dict.get("servo_duration_ms", 80))
+        self.debug_hardware = bool(config_dict.get("debug_hardware", False))
+        self.debug_every_n = max(1, int(config_dict.get("debug_every_n_commands", 10)))
         self.last_command_time = 0.0
+        self.command_count = 0
+        self.last_response = None
 
         if not self.is_simulation:
             ip = config_dict.get("robot_ip", "127.0.0.1")
             try:
-                YanAPI.yan_api_init(ip)
-                print("[HARDWARE] YanAPI init OK | ip={}".format(ip))
+                init_resp = YanAPI.yan_api_init(ip)
+                print("[HARDWARE] YanAPI init OK | ip={} | resp={}".format(ip, init_resp))
             except Exception as e:
                 print("[ERROR] YanAPI init failed: {}".format(e))
 
@@ -49,20 +53,29 @@ class YansheeInterface:
 
     def _send_to_hardware(self, angle):
         prev = self.current_angle
-        self.current_angle = angle
         final_angle_int = int(round(angle))
+        self.command_count += 1
 
         if self.is_simulation:
+            self.current_angle = angle
             if abs(angle - prev) >= 0.1:  # nhạy hơn một chút để debug
                 print("[SIM] NeckLR -> {}deg".format(final_angle_int))
         else:
             try:
-                YanAPI.set_servos_angles({self.servo_name: final_angle_int}, self.servo_duration_ms)
+                resp = YanAPI.set_servos_angles({self.servo_name: final_angle_int}, self.servo_duration_ms)
+                self.last_response = resp
+                self.current_angle = angle
+                if self.debug_hardware and self.command_count % self.debug_every_n == 0:
+                    print("[HARDWARE] set_servos_angles {}={} dur={} -> {}".format(
+                        self.servo_name, final_angle_int, self.servo_duration_ms, resp))
             except Exception as e:
                 print("[ERROR] YanAPI failed: {}".format(e))
 
     def get_current_angle(self):
         return self.current_angle
+
+    def get_last_response(self):
+        return self.last_response
 
     def set_head_angle(self, pid_correction):
         """
