@@ -13,7 +13,7 @@ import json
 import os
 import argparse
 
-W, H     = 640, 480
+W, H = 320, 240
 ANNO_DIR = "data/annotations"
 
 
@@ -24,7 +24,7 @@ def load_gt_scaled(clip_name):
     gt = {}
     for a in coco["annotations"]:
         x, y, w, h = a["bbox"]
-        gt[a["image_id"]] = [x * 2.0, y * 2.0, w * 2.0, h * 2.0]
+        gt[a["image_id"]] = [x, y, w, h]
     return gt
 
 
