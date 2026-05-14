@@ -19,7 +19,8 @@ class VisionLBP(VisionSystem):
     def __init__(self, cascade_path=None, conf_threshold=0.5,
              detection_skip=5, pad_ratio=0.20, iou_reinit_threshold=0.5,
              max_jump_px=180, min_size=30, max_size=400,
-             min_neighbors=5, scale_factor=1.05):
+             min_neighbors=5, scale_factor=1.05,
+             max_tracker_confirm_misses=2):
         """
         Parameters
         ----------
@@ -64,6 +65,8 @@ class VisionLBP(VisionSystem):
         self.is_tracking   = False
         self.bbox          = None
         self.last_center   = None
+        self.confirm_misses = 0
+        self.max_tracker_confirm_misses = int(max_tracker_confirm_misses)
 
         print("[LBP-MOSSE] Init OK | skip={} | pad={:.0%} | iou_thr={} | minN={} | minSz={}".format(
         self.detection_skip, self.pad_ratio, self.iou_reinit_threshold,
@@ -114,10 +117,13 @@ class VisionLBP(VisionSystem):
                 maxSize      = self.max_size,
             )
 
+            detector_confirmed = False
             if len(faces) > 0:
                 best_raw = self._select_best_face(faces)
 
                 if best_raw is not None:
+                    detector_confirmed = True
+                    self.confirm_misses = 0
                     best_padded  = self._add_padding(best_raw, frame.shape)
                     should_reinit = (
                         not self.is_tracking
@@ -130,11 +136,11 @@ class VisionLBP(VisionSystem):
 
                     self.bbox    = best_padded if self.bbox is None else self.bbox
                     target_found = True
-
-            else:
-                if not self.is_tracking:
+            if run_detection and not detector_confirmed:
+                self.confirm_misses += 1
+                if self.confirm_misses >= self.max_tracker_confirm_misses:
+                    self._reset_tracker()
                     target_found = False
-                    self.bbox    = None
 
         # --- 3. Tinh center ---
         if target_found and self.bbox is not None:
@@ -215,3 +221,5 @@ class VisionLBP(VisionSystem):
         self.tracker     = None
         self.is_tracking = False
         self.bbox        = None
+        self.last_center = None
+        self.confirm_misses = 0

@@ -26,11 +26,13 @@ class YansheeInterface:
         self.servo_direction = float(config_dict.get("servo_direction", -1.0))
         self.min_command_interval = float(config_dict.get("min_command_interval_sec", 0.08))
         self.servo_duration_ms = int(config_dict.get("servo_duration_ms", 80))
+        self.min_angle_step = float(config_dict.get("min_angle_step", 2.0))
         self.debug_hardware = bool(config_dict.get("debug_hardware", False))
         self.debug_every_n = max(1, int(config_dict.get("debug_every_n_commands", 10)))
         self.last_command_time = 0.0
         self.command_count = 0
         self.last_response = None
+        self.last_sent_angle = self.center_angle
 
         if not self.is_simulation:
             ip = config_dict.get("robot_ip", "127.0.0.1")
@@ -92,6 +94,10 @@ class YansheeInterface:
         # 2. Kẹp (Clamp) góc vào giới hạn an toàn của YanAPI (15 - 165)
         safe_angle = max(min(new_angle, self.max_abs_angle), self.min_abs_angle)
         self.target_angle = safe_angle
+
+        if abs(safe_angle - self.last_sent_angle) < self.min_angle_step:
+            return
+        self.last_sent_angle = safe_angle
         
         # 3. Gửi lệnh đi
         if self.use_thread:

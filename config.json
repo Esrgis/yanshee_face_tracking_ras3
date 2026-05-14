@@ -8,9 +8,10 @@
     "robot_ip": "192.168.31.239",
     "use_multithreading": true,
     "servo_direction": 1,
-    "min_command_interval_sec": 0.20,
-    "servo_duration_ms": 200,
-    "debug_hardware": true,
+    "min_command_interval_sec": 0.25,
+    "servo_duration_ms": 250,
+    "min_angle_step": 2.0,
+    "debug_hardware": false,
     "debug_every_n_commands": 10
   },
   "stream_monitor": {
@@ -24,7 +25,7 @@
     "max_record_sec": 30
   },
   "vision": {
-    "active_model": "lbp",
+    "active_model": "haarcascade",
     "models": {
       "haarcascade": "models/haarcascade_frontalface_default.xml",
       "lbp": "models/lbpcascade_frontalface_improved.xml",
@@ -40,13 +41,14 @@
   },
   "vision_params": {
     "iou_thresh": 0.3,
-    "min_size": 30,
+    "min_size": 40,
     "max_size": 400,
-    "min_neighbors_haar": 5,
-    "min_neighbors_lbp": 3,
+    "min_neighbors_haar": 6,
+    "min_neighbors_lbp": 5,
     "scale_factor_haar": 1.08,
     "scale_factor_lbp": 1.05,
-    "conf_threshold_ssd": 0.5
+    "conf_threshold_ssd": 0.5,
+    "max_tracker_confirm_misses": 2
   },
   "adaptive_scheduler": {
     "active_config": "D",
@@ -55,10 +57,10 @@
       "A": {"base_skip": 1, "alpha": 0.0,  "beta": 0.0},
       "B": {"base_skip": 5, "alpha": 0.0,  "beta": 0.0},
       "C": {"base_skip": 5, "alpha": 0.08, "beta": 0.0},
-      "D": {"base_skip": 5, "alpha": 0.08, "beta": 0.2}
+      "D": {"base_skip": 2, "alpha": 0.10, "beta": 0.25}
     },
     "min_skip": 1,
-    "max_skip": 15,
+    "max_skip": 6,
     "velocity_window": 5
   },
   "robot_yanshee": {

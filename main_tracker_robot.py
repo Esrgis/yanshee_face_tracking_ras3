@@ -50,6 +50,7 @@ def main():
 
     cfg         = load_config()
     vis_cfg     = cfg.get("vision", {})
+    vis_params  = cfg.get("vision_params", {})
     pid_cfg     = cfg.get("controller_pid", {})
     kal_cfg     = cfg.get("filter_kalman", {})
     rob_cfg     = cfg.get("robot_yanshee", {})
@@ -95,6 +96,11 @@ def main():
             detection_skip       = sel_cfg.get("base_skip", 5),
             pad_ratio            = vis_cfg.get("pad_ratio", 0.20),
             iou_reinit_threshold = vis_cfg.get("iou_reinit_threshold", 0.5),
+            min_neighbors        = vis_params.get("min_neighbors_lbp", 5),
+            scale_factor         = vis_params.get("scale_factor_lbp", 1.05),
+            min_size             = vis_params.get("min_size", 30),
+            max_size             = vis_params.get("max_size", 400),
+            max_tracker_confirm_misses = vis_params.get("max_tracker_confirm_misses", 2),
         )
     else:
         print("[INFO] Using Haar Cascade")
@@ -103,6 +109,11 @@ def main():
             detection_skip       = sel_cfg.get("base_skip", 5),
             pad_ratio            = vis_cfg.get("pad_ratio", 0.20),
             iou_reinit_threshold = vis_cfg.get("iou_reinit_threshold", 0.5),
+            min_neighbors        = vis_params.get("min_neighbors_haar", 5),
+            scale_factor         = vis_params.get("scale_factor_haar", 1.08),
+            min_size             = vis_params.get("min_size", 30),
+            max_size             = vis_params.get("max_size", 400),
+            max_tracker_confirm_misses = vis_params.get("max_tracker_confirm_misses", 2),
         )
 
     kalman = TrackerKalmanFilter(

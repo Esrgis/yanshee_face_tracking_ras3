@@ -20,7 +20,8 @@ class VisionHaarCascade(VisionSystem):
     def __init__(self, cascade_path=None, conf_threshold=0.5,
              detection_skip=5, pad_ratio=0.20, iou_reinit_threshold=0.5,
              max_jump_px=180, min_size=30, max_size=400,
-             min_neighbors=5, scale_factor=1.08):
+             min_neighbors=5, scale_factor=1.08,
+             max_tracker_confirm_misses=2):
         """
         Parameters
         ----------
@@ -64,6 +65,8 @@ class VisionHaarCascade(VisionSystem):
         self.is_tracking   = False
         self.bbox          = None                 # bbox hiện tại (đã padded)
         self.last_center   = None                 # (cx, cy) frame trước
+        self.confirm_misses = 0
+        self.max_tracker_confirm_misses = int(max_tracker_confirm_misses)
 
         print("[Haar-MOSSE] Init OK | skip={} | pad={:.0%} | iou_thr={} | minN={} | minSz={}".format(
         self.detection_skip, self.pad_ratio, self.iou_reinit_threshold,
@@ -111,11 +114,14 @@ class VisionHaarCascade(VisionSystem):
                 maxSize      = self.max_size,
             )
 
+            detector_confirmed = False
             if len(faces) > 0:
                 # FIX 3: chọn mặt gần vị trí trước, không chỉ lớn nhất
                 best_raw = self._select_best_face(faces)
 
                 if best_raw is not None:
+                    detector_confirmed = True
+                    self.confirm_misses = 0
                     # FIX 1: thêm padding trước khi init MOSSE
                     best_padded = self._add_padding(best_raw, frame.shape)
 
@@ -133,10 +139,13 @@ class VisionHaarCascade(VisionSystem):
                     target_found = True
 
             else:
-                # Haar không thấy gì
-                if not self.is_tracking:
+                detector_confirmed = False
+
+            if run_detection and not detector_confirmed:
+                self.confirm_misses += 1
+                if self.confirm_misses >= self.max_tracker_confirm_misses:
+                    self._reset_tracker()
                     target_found = False
-                    self.bbox    = None
 
         # --- 3. Tính center ---
         if target_found and self.bbox is not None:
@@ -225,3 +234,5 @@ class VisionHaarCascade(VisionSystem):
         self.tracker     = None
         self.is_tracking = False
         self.bbox        = None
+        self.last_center = None
+        self.confirm_misses = 0
