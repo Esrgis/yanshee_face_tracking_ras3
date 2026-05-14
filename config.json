@@ -8,8 +8,8 @@
     "robot_ip": "192.168.31.239",
     "use_multithreading": true,
     "servo_direction": 1,
-    "min_command_interval_sec": 0.08,
-    "servo_duration_ms": 80,
+    "min_command_interval_sec": 0.20,
+    "servo_duration_ms": 200,
     "debug_hardware": true,
     "debug_every_n_commands": 10
   },
