@@ -18,9 +18,9 @@ class YansheeInterface:
         if self.is_simulation:
             self.use_thread = False  # Luôn tắt threading trong simulation để dễ debug
         self.servo_name = "NeckLR"
-        self.center_angle = 90.0
-        self.min_abs_angle = 15.0
-        self.max_abs_angle = 165.0
+        self.center_angle = float(config_dict.get("servo_center", 90.0))
+        self.min_abs_angle = float(config_dict.get("servo_min_abs", 15.0))
+        self.max_abs_angle = float(config_dict.get("servo_max_abs", 165.0))
         self.current_angle = self.center_angle
         self.target_angle = self.center_angle
         self.servo_direction = float(config_dict.get("servo_direction", -1.0))

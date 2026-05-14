@@ -135,7 +135,11 @@ def main():
         velocity_window = sched_cfg.get("velocity_window", 5),
     )
 
-    robot = YansheeInterface(hw_cfg, is_simulation=is_sim)
+    robot_hw_cfg = dict(hw_cfg)
+    robot_hw_cfg["servo_center"] = rob_cfg.get("servo_center", 90.0)
+    robot_hw_cfg["servo_min_abs"] = rob_cfg.get("servo_min_abs", 15.0)
+    robot_hw_cfg["servo_max_abs"] = rob_cfg.get("servo_max_abs", 165.0)
+    robot = YansheeInterface(robot_hw_cfg, is_simulation=is_sim)
     streamer = None
     if enable_stream and FrameStreamServer is not None:
         streamer = FrameStreamServer(
@@ -169,7 +173,9 @@ def main():
             dt   = now - prev_time
             prev_time = now
 
+            t_cap0 = time.time()
             ret, frame = cap.read()
+            t_cap1 = time.time()
             if not ret:
                 break
 
@@ -182,7 +188,9 @@ def main():
             vision.detection_skip = skip
 
             # 2. Vision
+            t_vis0 = time.time()
             found, bbox, cx_raw, cy_raw = vision.process_frame(frame)
+            t_vis1 = time.time()
 
             # 3. Kalman
             if found and cx_raw >= 0:
@@ -237,6 +245,7 @@ def main():
                 ))
 
             # 8. UI / remote monitor (optional)
+            t_stream0 = time.time()
             if show_ui or streamer is not None:
                 disp = frame.copy()
                 if found and bbox:
@@ -252,10 +261,19 @@ def main():
                     (5, 40), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 255, 0), 1)
                 if streamer is not None:
                     streamer.update(disp)
+            t_stream1 = time.time()
             if show_ui:
                 cv2.imshow("Yanshee Tracker", disp)
                 if cv2.waitKey(1) & 0xFF == ord("q"):
                     break
+
+            if frame_count % 30 == 0:
+                print("[latency] cap={:.1f}ms vision={:.1f}ms stream={:.1f}ms loop={:.1f}ms".format(
+                    (t_cap1 - t_cap0) * 1000.0,
+                    (t_vis1 - t_vis0) * 1000.0,
+                    (t_stream1 - t_stream0) * 1000.0,
+                    (time.time() - now) * 1000.0,
+                ))
 
     except KeyboardInterrupt:
         print("\n[INFO] Stopped.")
