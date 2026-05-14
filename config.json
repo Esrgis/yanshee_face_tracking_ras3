@@ -70,12 +70,12 @@
     "backoff_delta": 5
   },
   "controller_pid": {
-    "Kp": 0.05,
+    "Kp": 0.025,
     "Ki": 0.0,
-    "Kd": 0.01,
-    "max_integral": 50.0,
-    "deadzone": 2.0,
-    "output_limit": 15.0
+    "Kd": 0.004,
+    "max_integral": 20.0,
+    "deadzone": 6.0,
+    "output_limit": 4.0
   },
   "filter_kalman": {
     "process_noise_cov": 0.03,

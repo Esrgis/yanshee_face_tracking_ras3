@@ -13,6 +13,8 @@ def main():
     ap.add_argument("--servo", default="NeckLR")
     ap.add_argument("--duration", type=int, default=1200)
     ap.add_argument("--angles", default="90,45,135,90")
+    ap.add_argument("--sweep", action="store_true",
+                    help="Quet range an toan 90->15->90->165->90")
     ap.add_argument("--list-api", action="store_true")
     args = ap.parse_args()
 
@@ -25,8 +27,14 @@ def main():
     init_resp = YanAPI.yan_api_init(args.ip)
     print("[TEST] yan_api_init({}) -> {}".format(args.ip, init_resp))
 
+    if args.sweep:
+        raw_angles = "90,75,60,45,30,15,30,45,60,75,90,105,120,135,150,165,150,135,120,105,90"
+        print("[TEST] SWEEP mode: 90 -> 15 -> 90 -> 165 -> 90")
+    else:
+        raw_angles = args.angles
+
     prev_angle = None
-    for raw in args.angles.split(","):
+    for raw in raw_angles.split(","):
         angle = int(raw.strip())
         if prev_angle is None:
             direction = "center/start"
